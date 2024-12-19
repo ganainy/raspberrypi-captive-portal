@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .terms {
+            text-align: left;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+        .terms a {
+            color: #007bff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2 style="text-align: center; margin-bottom: 2rem;">WiFi Login</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="terms">
+                <label>
+                    <input type="checkbox" id="tos" required>
+                    I agree to the <a href="/terms-of-service.html" target="_blank">Terms of Service</a>.
+                </label>
+            </div>
+            <button type="submit">Login</button>
+            <div id="error" class="error"></div>
+        </form>
+        <p style="text-align:center;">
+            <a href="/signup.html">No account? Sign up here!</a>
+        </p>
+    </div>
+
+    <script>
+        // Simple console.log for logging
+        function log(message, ...args) {
+            console.log(message, ...args);
+        }
+        
+        // Utility function to get a cookie
+        function getCookie(name) {
+            console.log(`Getting cookie for ${name}...`);
+            const cookieName = `${name}=`;
+            const decodedCookie = decodeURIComponent(document.cookie);
+            const cookieArray = decodedCookie.split(';');
+            
+            for(let i = 0; i < cookieArray.length; i++) {
+                let cookie = cookieArray[i];
+                while (cookie.charAt(0) === ' ') {
+                    cookie = cookie.substring(1);
+                }
+                if (cookie.indexOf(cookieName) === 0) {
+                    console.log(`Cookie found: ${cookie.substring(cookieName.length, cookie.length)}`);
+                    return cookie.substring(cookieName.length, cookie.length);
+                }
+            }
+            console.log(`Cookie for ${name} not found.`);
+            return "";
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            console.log('Login form submitted.');
+
+            // Check if the user has accepted the Terms of Service
+            if (!document.getElementById('tos').checked) {
+                console.log('User has not accepted the Terms of Service.');
+                document.getElementById('error').textContent = 'You must agree to the Terms of Service to log in.';
+                return;
+            }
+
+            const formData = new FormData(e.target);
+            const username = formData.get('username');
+            const password = formData.get('password');
+
+            console.log(`Attempting to log in with username: ${username}`);
+
+            try {
+                // Get cookie information
+                const cookieInfo = {
+                    mac: getCookie('mac'),
+                    ip: getCookie('ip'),
+                    agent: getCookie('agent'),
+                    original_url: getCookie('original_url'),
+                    http_method: getCookie('http_method'),
+                    referer: getCookie('referer'),
+                    username: username
+                };
+                                console.log('Cookie information:', cookieInfo);
+
+                const response = await fetch('https://auth.ganainy.online/login_api', { // Use the EC2 domain for auth API
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        cookieInfo: cookieInfo
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('Login successful, redirecting to welcome page...');
+                    // Set the username cookie so that it can be used in the welcome page
+                    setCookie('username', username, 30);
+
+                    window.location.href = '/welcome.html';  // Redirect to the welcome page after successful login
+                } else {
+                    const errorData = await response.json();  // Parse the response as JSON
+                    const errorText = errorData.detail || 'Unknown error';  // Access the "detail" field
+                    console.log(`Login failed: ${errorText}`);
+                    document.getElementById('error').textContent = `Login failed: ${errorText}`;
+                }
+            } catch (error) {
+                console.error('Error during login request:', error);
+                document.getElementById('error').textContent = 'Connection error: ' + error.message;
+            }
+        });
+
+        function setCookie(name, value, days = 30) {
+            try {
+                log(`Setting cookie: ${name}`, { value, days });
+                
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                const expires = `expires=${date.toUTCString()}`;
+                
+                // Secure cookie settings with logging
+                const cookieString = `${name}=${encodeURIComponent(value)};${expires};path=/;SameSite=Strict;${window.location.protocol === 'https:' ? 'Secure' : ''}`;
+                
+                document.cookie = cookieString;
+                
+                log('Cookie set successfully', { name, cookieString });
+            } catch (error) {
+                log('Failed to set cookie', { name, error });
+            }
+        }
+    </script>
+</body>
+</html>

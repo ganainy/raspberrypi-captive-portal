@@ -1,0 +1,5 @@
+RewriteEngine On
+RewriteRule ^welcome$ /welcome.html [L]
+RewriteRule ^login$ /login.html [L]
+RewriteRule ^signup$ /signup.html [L]
+RewriteRule ^terms-of-service$ /terms-of-service.html [L]

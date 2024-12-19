@@ -1,0 +1,2 @@
+this file is connected to the backend authentication server hosted remotely through an SSH tunnel, any thing sent to port 4000 remotely on the auth server will be sent to the local RPi hosting this backend file on port 4001
+the received data which includes the ip of the device that has authenticated or unauthenticated will be used to grant/block internet access for the user

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captive Portal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        p {
+            margin-bottom: 1.5rem;
+            color: #555;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+        a {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        a:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Captive Portal</h1>
+        <p>
+            This site is hosting a captive portal authentication system for analysis purposes in the field of internet security.
+        </p>
+        <p>
+            Please use the provided login system to get access the network.
+        </p>
+        <a href="/login.html">Go to Login</a>
+    </div>
+
+    <script>
+        // Simple console.log for logging
+        function log(message, ...args) {
+            console.log(message, ...args);
+        }
+    
+        // Utility function to set a cookie
+        function setCookie(name, value, days = 30) {
+            try {
+                log(`Setting cookie: ${name}`, { value, days });
+                
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                const expires = `expires=${date.toUTCString()}`;
+                
+                // Secure cookie settings with logging
+                const cookieString = `${name}=${encodeURIComponent(value)};${expires};path=/;SameSite=Strict;${window.location.protocol === 'https:' ? 'Secure' : ''}`;
+                
+                document.cookie = cookieString;
+                
+                log('Cookie set successfully', { name, cookieString });
+            } catch (error) {
+                log('Failed to set cookie', { name, error });
+            }
+        }
+    
+        // Function to extract and set cookies from URL parameters 
+        function extractAndSetCookies() {
+            try {
+                log('Extracting cookies from URL parameters');
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                
+                // List of parameters to extract and set as cookies
+                const cookieParams = [
+                    'mac', 
+                    'ip', 
+                    'agent', 
+                    'original_url',
+                    'http_method',
+                    'referer',
+                ];
+    
+                // Set cookies for each parameter
+                cookieParams.forEach(param => {
+                    const value = urlParams.get(param) || '';
+                    setCookie(param, decodeURIComponent(value));
+                });
+    
+                // Optionally, set a timestamp for when these were set
+                setCookie('params_set_timestamp', new Date().toISOString());
+                
+                log('Cookie extraction complete');
+            } catch (error) {
+                log('Failed to extract and set cookies', { error });
+            }
+        }
+    
+        // Retrieve the URL parameters from the URL with enhanced logging
+        function extractParamsByURLSearchParams() {
+            try {
+                log('Extracting parameters from URL');
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                
+                const params = {
+                    mac: urlParams.get('mac'),
+                    ip: urlParams.get('ip'),
+                    agent: decodeURIComponent(urlParams.get('agent') || ''),
+                    original_url: decodeURIComponent(urlParams.get('original_url') || ''),
+                    http_method: urlParams.get('http_method'),
+                    referer: decodeURIComponent(urlParams.get('referer') || '')
+                };
+    
+                log('Extracted parameters:', params);
+                return params;
+            } catch (error) {
+                log('Failed to extract URL parameters', { error });
+                return {};
+            }
+        }
+    
+        // Run on page load
+        window.onload = () => {
+            log('Page loaded, beginning parameter processing');
+            
+            // First, check if we have URL parameters to process
+            if (window.location.search) {
+                extractAndSetCookies();
+                extractParamsByURLSearchParams();
+            } else {
+                log('No URL parameters found');
+            }
+        };
+    </script>
+</body>
+</html>
