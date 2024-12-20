@@ -1,10 +1,12 @@
 # Setting up a Captive Portal on Raspberry Pi
 
-## This was originally developed for a Raspberry Pi but could theoretically work on any Linux device with WLAN capabilities.
+> Note: While designed for Raspberry Pi, this implementation is compatible with any Linux system featuring WLAN capabilities.
 
 ## Prerequisites
 1. **Operating System**: Parrot OS 6.2 (RPi Edition) or any Ubuntu/Debian RPi distro
-2. **Network Setup**: Ethernet cable connection on `eth0`
+2. **Network Setup**: Ethernet cable connection (in RPi case on interface `eth0`)
+3. **Domain Name**: Will be used for the remote Authentication website.
+4. **Dynamic hosting provider**: AWS or your favourite provider.
 
 ## Step 1: Install Required Packages
 ```bash
@@ -12,7 +14,7 @@ sudo apt update
 sudo apt upgrade
 sudo apt install -y net-tools iptables iptables-persistent dnsmasq tcpdump nodejs
 ```
-
+---
 ## Step 2: Configure `dnsmasq`
 
 ### Edit the `dnsmasq` configuration file:
@@ -61,7 +63,7 @@ sudo systemctl restart dnsmasq
 sudo systemctl stop systemd-resolved
 sudo systemctl disable systemd-resolved
 ```
-
+---
 ## Step 3: Configure `NetworkManager`
 
 ### Edit `NetworkManager.conf`:
@@ -119,7 +121,7 @@ sudo nmcli connection modify Hotspot \
 ```bash
 sudo nmcli connection up Hotspot
 ```
-
+---
 ## Step 4: Enable IP Forwarding
 
 ### Edit `sysctl.conf`:
@@ -135,7 +137,7 @@ net.ipv4.ip_forward=1
 ```bash
 sudo sysctl -p
 ```
-
+---
 ## Step 5: Setup Firewall Rules
 
 ### Default policies:
@@ -167,17 +169,18 @@ sudo iptables -A FORWARD -d <SERVER_IP>/32 -p tcp -m tcp --dport 443 -j ACCEPT
 ```bash
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ```
-
-## Step 6: Blocking and Redirecting Traffic
+---
+## Step 6: Blocking (HTTPS) and Redirecting (HTTP) Traffic
 
 ### Blocking and redirecting:
-Run a script to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
+#### We will run a script ([`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/iptables-blocking/iptables_blocking_rules.sh)) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
 ```bash
 sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -A FORWARD -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
 ```
 
 ### Allow authenticated users:
+#### This will be done automatically when the local auth server ([`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js)) gets a request from the remote server to log in an authenticated device
 ```bash
 sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
@@ -187,7 +190,7 @@ sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443
 ```bash
 sudo iptables-save | sudo tee /etc/iptables/rules.v4
 ```
-
+---
 ## Step 7: SSH Reverse Tunnel
 
 ### Allow connections on port 4000:
@@ -203,17 +206,44 @@ ssh-keygen -t ed25519 -C "your_email@example.com"
 ### Add the public key to the remote server:
 Copy the contents of `~/.ssh/id_ed25519.pub` to the `~/.ssh/authorized_keys` file on the remote server.
 
-### Establish the SSH tunnel:
+### Set up persistent tunnel using systemd:
+
+1. **Create the service file:**
 ```bash
-ssh -R 4000:localhost:4001 root@<SERVER_IP>
+sudo nano /etc/systemd/system/ssh-tunnel.service
 ```
 
-### Install `autossh` for persistent connections:
-```bash
-sudo apt-get install autossh
-autossh -M 0 -f -N -R 4000:localhost:4001 root@<SERVER_IP>
+2. **Add the following configuration:**
+```ini
+[Unit]
+Description=SSH Tunnel Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -NR 4000:localhost:4001 root@<SERVER_IP> -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
 ```
 
+3. **Enable and start the service:**
+```bash
+sudo systemctl enable ssh-tunnel
+sudo systemctl start ssh-tunnel
+```
+
+### Monitor the tunnel:
+```bash
+# Check service status
+sudo systemctl status ssh-tunnel
+
+# View logs
+journalctl -fu ssh-tunnel
+```
+---
 ## Step 8: Node.js Services
 
 ### Node Listener Service
@@ -226,7 +256,9 @@ autossh -M 0 -f -N -R 4000:localhost:4001 root@<SERVER_IP>
 
 #### Steps to Set Up
 1. **Copy Code to a file**
-  - Create a file and paste the contents of [`listener.js`](../local-auth-server/listener.js) into it.
+ - Create a file and paste the contents of [`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js) into it.
+
+
   ```bash
    sudo nano /opt/captive-portal-listener-node/listener.js
    ```
@@ -280,7 +312,7 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 #### Installation & Setup
 
 1. **Copy Code to a file**
-   - Create a file and paste the contents of [`captive-http-redirect-proxy.js`](../http-redirect-proxy-node/captive-http-redirect-proxy.js) into it.
+   - Create a file and paste the contents of [`http-redirect-proxy-node/captive-http-redirect-proxy.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/http-redirect-proxy-node/captive-http-redirect-proxy.js) into it.
 
    ```bash
    sudo nano /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
@@ -333,7 +365,8 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 - Default IP: 192.168.1.1
 - Captive portal target: http://[YOUR_CAPTIVE_SUBDOMAIN]
 
-### Helpful SQLite Commands
+---
+### Step 9:(Optional: helpful SQLite Commands to see the Sessions database) 
 - Open the database:
   ```bash
   sqlite3 /path-to-db/[DB_NAME].db

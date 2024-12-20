@@ -309,20 +309,60 @@ mysql -u root -p
 CREATE DATABASE [YOUR_DATABASE_NAME];
 ```
 
-### 7. Run the Server
-```bash
-node auth_api.js
-```
+### 7. Run the Auth Server
+1. **Create a systemd service file**:
+   Create a new service file in `/etc/systemd/system/`:
+
+   ```bash
+   sudo nano /etc/systemd/system/auth-api.service
+   ```
+
+2. **Add the following content** to the service file:
+
+   ```ini
+   [Unit]
+   Description=Auth API Server
+   After=network.target
+
+   [Service]
+   ExecStart=/usr/bin/node /path/to/auth_api.js
+   WorkingDirectory=/path/to/your/project
+   Environment=NODE_ENV=production
+   Restart=always
+   User=your_user
+   Group=your_group
+   # Adjust permissions as needed
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Replace `/path/to/auth_api.js` with the actual path to your `auth_api.js` file and `your_user` and `your_group` with the appropriate user and group for the server process.
+
+3. **Reload systemd and enable the service**:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable auth-api.service
+   sudo systemctl start auth-api.service
+   ```
+
+4. **Check the service status** to ensure it is running:
+
+   ```bash
+   sudo systemctl status auth-api.service
+   ```
+
+This will ensure that your `auth_api.js` server runs as a background service and restarts automatically if it crashes or if the system reboots.
 
 ### 8. Test the API
 ```bash
-curl https://auth.ganainy.online/hello_api
+curl https://[YOUR_AUTH_SUBDOMAIN]/hello_api
 ```
 
 Notes:
-- The API will run on port 3000 by default
+- The Auth server API will run on port 3000 by default
 - Users table will be created automatically
-- Replace running directly with ```node auth_api.js``` by a system service if you want the API to be always running 
 - API endpoints:
   - POST `/login_api`
   - POST `/signup_api`
