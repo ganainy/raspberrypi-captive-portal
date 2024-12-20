@@ -196,8 +196,8 @@ app.get('/hello_api', (req, res) => {
 });
 
 // Read the SSL certificates
-const privateKey = fs.readFileSync('/etc/letsencrypt/live/ganainy.online/privkey.pem', 'utf8');
-const certificate = fs.readFileSync('/etc/letsencrypt/live/ganainy.online/fullchain.pem', 'utf8');
+const privateKey = fs.readFileSync('/etc/letsencrypt/live/[YOUR_DOMAIN]/privkey.pem', 'utf8');
+const certificate = fs.readFileSync('/etc/letsencrypt/live/[YOUR_DOMAIN]/fullchain.pem', 'utf8');
 const credentials = { key: privateKey, cert: certificate };
 
 // Start the HTTPS server
