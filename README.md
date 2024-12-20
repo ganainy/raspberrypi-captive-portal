@@ -1,35 +1,28 @@
 # Raspberry Pi Captive Portal (Remote Login)
 
 ## Overview
-This branch implements a captive portal on Raspberry Pi that redirects users to a remote authentication server. All authentication logic is handled on a remote AWS EC2 instance, making this setup ideal for centralized user management.
+This branch implements a captive portal on the Raspberry Pi that redirects users to a remote authentication server. Upon successful login, the user is granted internet access for one hour. This setup is more suitable for large businesses with centralized user data, where user management and authentication are handled remotely.
+
+> **Note:** For local authentication without relying on a Hosting service (everything will be handled directly on the Raspberry Pi, making it more suitable for small businesses), check out the [`local-login`](../local-login/README.md) branch.
 
 ## Features
-- Redirects all HTTP traffic to remote authentication server
-- DNS redirection for captive portal detection
-- Remote user authentication and management
-- SSH reverse tunnel for secure communication
-- Automatic session management
-
-## Architecture
-1. **Traffic Interception**: Using `dnsmasq` and `iptables`
-2. **Authentication**: Remote server at `captive.example.com`
-3. **Communication**: SSH reverse tunnel for secure data exchange
-4. **Session Management**: Node.js service for handling user sessions
+- **HTTP Interception & DNS Redirection**: Automatically detects and redirects users to the captive portal.
+- **Remote User Login & Authentication**: Users authenticate via a remote web server.
+- **SSH Reverse Tunnel**: Secure communication between the remote server and the Raspberry Pi.
+- **Automatic Session Management**: Handles session durations and renewals for users.
 
 ## Prerequisites
 - Raspberry Pi with Wi-Fi capability
 - Ethernet connection for internet backhaul
-- Parrot OS 6.2 (RPi Edition)
+- Any Ubuntu/Debian RPi distro
 - AWS EC2 instance with elastic IP
 - Registered domain name
 
 ## Quick Start
 1. Clone the repository and switch to remote-login branch
-2. Follow setup instructions in [rpi-setup.md](rpi-setup.md)
-3. Configure the remote server settings
-4. Start the services
+2. Follow RPi setup instructions in [rpi-setup.md](rpi-setup.md)
+3. Follow remote server setup instructions in [remote-server-setup.md](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote-website/remote-server-setup.md)
 
-## Alternative Approach
-For local authentication without AWS dependency, check out the [`local-login`](../local-login/README.md) branch.
-
+4. Configure the remote server settings
+5. Start the services
 ---

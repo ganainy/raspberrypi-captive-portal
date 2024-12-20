@@ -300,7 +300,7 @@ DB_NAME=[YOUR_DATABASE_NAME]
 ```bash
 nano auth_api.js
 ```
-2. Copy the provided code from [`auth_api.js`](../remote-website/auth_api.js) into `auth_api.js`
+2. Copy the provided code from [`/remote-website/auth_api.js`](../remote-website/auth_api.js) into `auth_api.js`
 3. Replace `[YOUR_DOMAIN]` with your actual domain in the SSL paths
 
 ### 6. Create MySQL Database
@@ -366,5 +366,5 @@ Notes:
 - API endpoints:
   - POST `/login_api`
   - POST `/signup_api`
-  - GET `/users_api` (debug only, delete if used in production)
+  - GET `/users_api` (debug only, delete fron [`/remote-website/auth_api.js`](../remote-website/auth_api.js) code if used in production)
   - GET `/hello_api` (debug only)
