@@ -1,3 +1,6 @@
+/*This Node.js HTTP proxy listens for HTTP traffic on port 8080, which is redirected from port 80 on the Raspberry Pi. The redirection is managed using iptables,
+ensuring that all HTTP requests initially arriving at port 80 are forwarded to the proxy server on port 8080 for processing. */
+
 const httpProxy = require("http-proxy");
 const http = require("http");
 const { exec } = require("child_process");

@@ -181,14 +181,14 @@ sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp --dport 80 -j DNAT --to-desti
 ## Step 6: Blocking (HTTPS) and Redirecting (HTTP) Traffic
 
 ### Blocking and redirecting:
-#### We will run a script ([`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-captive/iptables-blocking/iptables_blocking_rules.sh)) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
+#### We will run a script ([`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-login/iptables-blocking/iptables_blocking_rules.sh) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
 ```bash
 sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -A FORWARD -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
 ```
 
 ### Allow authenticated users:
-#### This will be done automatically when the local auth server ([`/auth-server/auth_api.js`](../auth-server/auth_api.js)) gets a request from the server to log in an authenticated device
+#### This will be done automatically when the local auth server [`/auth-server/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-login/auth-server/auth_api.js) gets a request from the server to log in an authenticated device
 ```bash
 sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
@@ -212,7 +212,7 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 #### Installation & Setup
 
 1. **Copy Code to a file**
-   - Copy content of this folder to RPi [`http-redirect-proxy-node/`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-captive/http-redirect-proxy-node/) into it.
+   - Copy content of this folder to RPi [`http-redirect-proxy-node/`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-login/http-redirect-proxy-node/captive-http-redirect-proxy.js) into it.
 
    ```bash
    sudo mkdir /opt/http-redirect-proxy-node/

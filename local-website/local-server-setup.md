@@ -97,7 +97,7 @@ Note: Replace `[YOUR_CAPTIVE_SUBDOMAIN]` with your actual local domain added to 
    sudo chown -R www-data:www-data /var/www/captive
    ```
 
-6. Copy website HTML files provided in ([`/local-website`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-captive/local-website)) to the directory
+6. Copy website HTML files provided in ([`/local-website`](https://github.com/ganainy/raspberrypi-captive-portal/tree/local-login/local-website) to the directory
 ```bash
    cd /var/www/captive
    ```
@@ -127,7 +127,7 @@ sudo npm install dotenv sqlite3 bcryptjs cors express -y
 ```bash
 sudo nano auth_api.js
 ```
-2. Copy the provided code from [`/auth-server/auth_api.js`](../auth-server/auth_api.js) into `auth_api.js`
+2. Copy the provided code from [`/auth-server/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-login/auth-server/auth_api.js) into `auth_api.js`
 
 
 ### 5. Run the Auth Server
