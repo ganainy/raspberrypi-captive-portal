@@ -19,10 +19,9 @@ This branch implements a captive portal on the Raspberry Pi that redirects users
 - Registered domain name
 
 ## Quick Start
-1. Clone the repository and switch to remote-login branch
+1. Clone the repository and switch to `remote-login` branch
 2. Follow RPi setup instructions in [rpi-setup.md](rpi-setup.md)
 3. Follow remote server setup instructions in [remote-server-setup.md](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote-website/remote-server-setup.md)
-
 4. Configure the remote server settings
 5. Start the services
 ---

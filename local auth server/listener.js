@@ -1,3 +1,17 @@
+/**
+ * This file establishes a connection to the backend authentication server hosted remotely via an SSH tunnel.
+ * Any traffic sent to port 4000 on the authentication server is forwarded to port 4001 on the local Raspberry Pi hosting this file.
+ * The received data, including the IP address of the authenticated device, is used to manage the user's internet access.
+ * 
+ * This server listens for incoming HTTP requests from the remote server, 
+ * activates or updates a session in the local SQLite database, and 
+ * allows internet access for the device associated with the session.
+ * 
+ * It also periodically checks for inactive sessions and revokes internet access 
+ * for those sessions after one hour.
+ */
+
+
 const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const bodyParser = require("body-parser");
@@ -162,29 +176,46 @@ app.post('/activate-session', validateSessionFields, async (req, res) => {
 // Route to deactivate a session and revoke internet access
 const deactivateSession = (userId, ip) => {
   console.log(`Deactivating session for user ${userId}...`);
+  
+  // Delete the active session for the user
   db.run(`
-    UPDATE sessions 
-    SET status = 'inactive', logout_timestamp = CURRENT_TIMESTAMP 
-    WHERE user_id = ? AND status = 'active' 
+    DELETE FROM sessions 
+    WHERE user_id = ?
   `, [userId], (err) => {
     if (err) {
-      console.error('Error updating session status:', err);
+      console.error('Error deleting session:', err);
     } else {
-      console.log(`Session for user ${userId} deactivated.`);
-      revokeInternetAccess(ip);
+      console.log(`Active session for user ${userId} deleted.`);
+      
+      // Create a new session with login_timestamp set to now and logout_timestamp set to one hour later
+      const loginTimestamp = new Date().toISOString();
+      const logoutTimestamp = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour later
+
+      db.run(`
+        INSERT INTO sessions (user_id, status, login_timestamp, logout_timestamp) 
+        VALUES (?, 'active', ?, ?)
+      `, [userId, loginTimestamp, logoutTimestamp], (err) => {
+        if (err) {
+          console.error('Error creating new session:', err);
+        } else {
+          console.log(`New session for user ${userId} created.`);
+          revokeInternetAccess(ip);
+        }
+      });
     }
   });
 };
 
+
 setInterval(() => {
   console.log("Checking for inactive sessions...");
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const currentTime = new Date().toISOString(); // Get the current system time
 
   db.all(`
-    SELECT user_id, ip, login_timestamp 
+    SELECT user_id, ip, logout_timestamp 
     FROM sessions 
-    WHERE status = 'active' AND login_timestamp < ?
-  `, [oneHourAgo], (err, sessions) => {
+    WHERE status = 'active' AND logout_timestamp < ?
+  `, [currentTime], (err, sessions) => {
     if (err) {
       console.error('Error fetching sessions:', err);
       return;
@@ -198,69 +229,121 @@ setInterval(() => {
 
 
 
+
 // Endpoint for testing the connection between RPi and remote server
 app.get('/test', (req, res) => {
   console.log("Testing connection...");
   res.status(200).json({ message: 'Connection between RPi and server is up' });
 });
-
-// Function to allow internet access via iptables
-function allowInternetAccess(clientIp) {
-  console.log(`Allowing internet access for IP: ${clientIp}`);
-  exec(`sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination 192.168.1.1:8080`, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error executing allowInternetAccess (HTTP): ${error.message}`);
-      return;
-    }
-    if (stderr) {
-      console.error(`stderr: ${stderr}`);
-      return;
-    }
-    console.log(`stdout: ${stdout}`);
-  });
-
-  exec(`sudo iptables -D FORWARD -i wlan0 -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error executing allowInternetAccess (HTTPS): ${error.message}`);
-      return;
-    }
-    if (stderr) {
-      console.error(`stderr: ${stderr}`);
-      return;
-    }
-    console.log(`stdout: ${stdout}`);
+// Helper function to check if a rule exists in iptables
+function ruleExists(ruleCheckCommand) {
+  return new Promise((resolve, reject) => {
+    exec(ruleCheckCommand, (error, stdout, stderr) => {
+      if (error) {
+        reject(`Error checking rule existence: ${error.message}`);
+        return;
+      }
+      if (stderr) {
+        reject(`stderr: ${stderr}`);
+        return;
+      }
+      resolve(stdout.includes('DNAT') || stdout.includes('REJECT'));
+    });
   });
 }
 
-// Function to revoke internet access via iptables
-function revokeInternetAccess(clientIp) {
-  console.log(`Revoking internet access for IP: ${clientIp}`);
-  exec(`sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination 192.168.1.1:8080`, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error executing revokeInternetAccess (HTTP): ${error.message}`);
-      return;
-    }
-    if (stderr) {
-      console.error(`stderr: ${stderr}`);
-      return;
-    }
-    console.log(`stdout: ${stdout}`);
-  });
+// Function to allow internet access via iptables
+async function allowInternetAccess(clientIp) {
+  console.log(`Allowing internet access for IP: ${clientIp}`);
 
-  exec(`sudo iptables -A FORWARD -i wlan0 -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error executing revokeInternetAccess (HTTPS): ${error.message}`);
-      return;
+  // Check if the rule exists before adding it
+  try {
+    const httpRuleCheck = `sudo iptables -t nat -L PREROUTING -v -n --line-numbers | grep '${clientIp}' | grep 'DNAT'`;
+    const httpsRuleCheck = `sudo iptables -L FORWARD -v -n --line-numbers | grep '${clientIp}' | grep 'REJECT'`;
+
+    const [httpExists, httpsExists] = await Promise.all([ruleExists(httpRuleCheck), ruleExists(httpsRuleCheck)]);
+
+    // Add the rule if it doesn't exist
+    if (!httpExists) {
+      exec(`sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination 192.168.1.1:8080`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error executing allowInternetAccess (HTTP): ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.error(`stderr: ${stderr}`);
+          return;
+        }
+        console.log(`stdout: ${stdout}`);
+      });
     }
-    if (stderr) {
-      console.error(`stderr: ${stderr}`);
-      return;
+
+    if (!httpsExists) {
+      exec(`sudo iptables -A FORWARD -i wlan0 -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error executing allowInternetAccess (HTTPS): ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.error(`stderr: ${stderr}`);
+          return;
+        }
+        console.log(`stdout: ${stdout}`);
+      });
     }
-    console.log(`stdout: ${stdout}`);
-  });
+
+  } catch (err) {
+    console.error(`Error checking or adding rules: ${err}`);
+  }
+}
+
+// Function to revoke internet access via iptables
+async function revokeInternetAccess(clientIp) {
+  console.log(`Revoking internet access for IP: ${clientIp}`);
+
+  // Check if the rule exists before deleting it
+  try {
+    const httpRuleCheck = `sudo iptables -t nat -L PREROUTING -v -n --line-numbers | grep '${clientIp}' | grep 'DNAT'`;
+    const httpsRuleCheck = `sudo iptables -L FORWARD -v -n --line-numbers | grep '${clientIp}' | grep 'REJECT'`;
+
+    const [httpExists, httpsExists] = await Promise.all([ruleExists(httpRuleCheck), ruleExists(httpsRuleCheck)]);
+
+    // Remove the rule if it exists
+    if (httpExists) {
+      exec(`sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination 192.168.1.1:8080`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error executing revokeInternetAccess (HTTP): ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.error(`stderr: ${stderr}`);
+          return;
+        }
+        console.log(`stdout: ${stdout}`);
+      });
+    }
+
+    if (httpsExists) {
+      exec(`sudo iptables -D FORWARD -i wlan0 -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error executing revokeInternetAccess (HTTPS): ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.error(`stderr: ${stderr}`);
+          return;
+        }
+        console.log(`stdout: ${stdout}`);
+      });
+    }
+
+  } catch (err) {
+    console.error(`Error checking or removing rules: ${err}`);
+  }
 }
 
 // Start the server
 app.listen(port, () => {
   console.log(`API listener server running at http://localhost:${port}`);
 });
+

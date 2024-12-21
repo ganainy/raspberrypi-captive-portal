@@ -12,7 +12,7 @@
 ```bash
 sudo apt update
 sudo apt upgrade
-sudo apt install -y net-tools iptables iptables-persistent dnsmasq tcpdump nodejs
+sudo apt install -y iptables iptables-persistent dnsmasq tcpdump nodejs npm
 ```
 ---
 ## Step 2: Configure `dnsmasq`
@@ -173,14 +173,14 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ## Step 6: Blocking (HTTPS) and Redirecting (HTTP) Traffic
 
 ### Blocking and redirecting:
-#### We will run a script ([`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/iptables-blocking/iptables_blocking_rules.sh)) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
+#### We will run a script [`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/iptables-blocking/iptables_blocking_rules.sh) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
 ```bash
 sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -A FORWARD -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
 ```
 
 ### Allow authenticated users:
-#### This will be done automatically when the local auth server ([`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js)) gets a request from the remote server to log in an authenticated device
+#### This will be done automatically when the local auth server [`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js) gets a request from the remote server to log in an authenticated device
 ```bash
 sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
