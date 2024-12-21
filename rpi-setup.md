@@ -5,16 +5,25 @@
 ## Prerequisites
 1. **Operating System**: Parrot OS 6.2 (RPi Edition) or any Ubuntu/Debian RPi distro
 2. **Network Setup**: Ethernet cable connection (in RPi case on interface `eth0`)
-3. **Domain Name**: Will be used for the remote Authentication website.
-4. **Dynamic hosting provider**: AWS or your favourite provider.
 
 ## Step 1: Install Required Packages
 ```bash
 sudo apt update
 sudo apt upgrade
-sudo apt install -y net-tools iptables iptables-persistent dnsmasq tcpdump nodejs
+sudo apt install -y iptables iptables-persistent dnsmasq tcpdump nodejs npm apache2
 ```
 ---
+
+#### Use a Custom Local Domain
+##### Point domain to the RPi ip of wlan0 interface (192.168.1.1)
+   ```bash
+   sudo nano /etc/hosts
+   ```
+   Add this line:
+   ```
+   192.168.1.1 captive.local
+   ```
+
 ## Step 2: Configure `dnsmasq`
 
 ### Edit the `dnsmasq` configuration file:
@@ -23,6 +32,7 @@ sudo nano /etc/dnsmasq.conf
 ```
 
 Add the following lines:
+> Note: Replace <SERVER_IP> with the ip you added in /etc/hosts
 ```conf
 # Disable re-directing DNS requests
 no-resolv
@@ -150,37 +160,35 @@ sudo iptables -P OUTPUT ACCEPT
 ### Basic rules:
 ```bash
 sudo iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -A INPUT -i lo -j ACCEPT
+sudo iptables -A INPUT -i lo -j ACCEPT 
 sudo iptables -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT
 sudo iptables -A INPUT -i eth0 -j ACCEPT
-sudo iptables -A INPUT -d <SERVER_IP>/32 -p tcp -m tcp --dport 443 -j ACCEPT
+sudo iptables -A INPUT -d 192.168.1.1 -p tcp -m tcp --dport 443 -j ACCEPT
 sudo iptables -A INPUT -p tcp -m tcp --dport 443 -j REJECT --reject-with icmp-port-unreachable
-```
-
-### Forwarding rules:
-```bash
 sudo iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
 sudo iptables -A FORWARD -i lo -j ACCEPT
 sudo iptables -A FORWARD -i eth0 -j ACCEPT
-sudo iptables -A FORWARD -d <SERVER_IP>/32 -p tcp -m tcp --dport 443 -j ACCEPT
+sudo iptables -A FORWARD -i wlan0 -d captive.local -j ACCEPT
+sudo iptables -A FORWARD -d 192.168.1.1 -p tcp -m tcp --dport 443 -j ACCEPT
 ```
 
 ### NAT rules:
 ```bash
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 ```
 ---
 ## Step 6: Blocking (HTTPS) and Redirecting (HTTP) Traffic
 
 ### Blocking and redirecting:
-#### We will run a script ([`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/iptables-blocking/iptables_blocking_rules.sh)) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
+#### We will run a script ([`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-captive/iptables-blocking/iptables_blocking_rules.sh)) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
 ```bash
 sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -A FORWARD -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
 ```
 
 ### Allow authenticated users:
-#### This will be done automatically when the local auth server ([`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js)) gets a request from the remote server to log in an authenticated device
+#### This will be done automatically when the local auth server ([`/auth-server/auth_api.js`](../auth-server/auth_api.js)) gets a request from the server to log in an authenticated device
 ```bash
 sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
@@ -191,117 +199,9 @@ sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443
 sudo iptables-save | sudo tee /etc/iptables/rules.v4
 ```
 ---
-## Step 7: SSH Reverse Tunnel
-
-### Allow connections on port 4000:
-```bash
-sudo iptables -A INPUT -p tcp --dport 4000 -j ACCEPT
-```
-
-### Generate SSH key pair:
-```bash
-ssh-keygen -t ed25519 -C "your_email@example.com"
-```
-
-### Add the public key to the remote server:
-Copy the contents of `~/.ssh/id_ed25519.pub` to the `~/.ssh/authorized_keys` file on the remote server.
-
-### Set up persistent tunnel using systemd:
-
-1. **Create the service file:**
-```bash
-sudo nano /etc/systemd/system/ssh-tunnel.service
-```
-
-2. **Add the following configuration:**
-```ini
-[Unit]
-Description=SSH Tunnel Service
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/ssh -NR 4000:localhost:4001 root@<SERVER_IP> -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes
-Restart=always
-RestartSec=60
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3. **Enable and start the service:**
-```bash
-sudo systemctl enable ssh-tunnel
-sudo systemctl start ssh-tunnel
-```
-
-### Monitor the tunnel:
-```bash
-# Check service status
-sudo systemctl status ssh-tunnel
-
-# View logs
-journalctl -fu ssh-tunnel
-```
----
-## Step 8: Node.js Services
-
-### Node Listener Service
-
-#### Responsibilities
-1. Listens on port `4001` for requests from the remote server (port `4000`) through a reverse SSH tunnel.
-2. Creates/updates user sessions for authenticated users.
-3. Grants or denies internet access based on session state.
-4. Periodically disconnects users after 1 hour of internet access.
-
-#### Steps to Set Up
-1. **Copy Code to a file**
- - Create a file and paste the contents of [`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js) into it.
-
-
-  ```bash
-   sudo nano /opt/captive-portal-listener-node/listener.js
-   ```
-2. **Install Dependencies**
-   ```bash
-   cd /opt/captive-portal-listener-node
-   npm install
-   ```
-3. **Create a Systemd Service**
-   ```bash
-   sudo nano /etc/systemd/system/node-listener.service
-   ```
-   **Service Configuration:**
-   ```ini
-   [Unit]
-   Description=Node.js Listener Service
-   After=network.target
-
-   [Service]
-   ExecStart=/usr/bin/node /opt/captive-portal-listener-node/listener.js
-   WorkingDirectory=/opt/captive-portal-listener-node
-   Restart=always
-   User=root
-   Group=root
-   Environment=NODE_ENV=production
-   Environment=PORT=4001
-   StandardOutput=syslog
-   StandardError=syslog
-   SyslogIdentifier=node-listener
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-4. **Start and Enable the Service**
-   ```bash
-   sudo systemctl enable node-listener.service
-   sudo systemctl start node-listener.service
-   ```
-
 ### Captive Portal Proxy Service
-
 #### Description
-A Node.js service that creates a proxy server to intercept HTTP requests and redirect users to a captive portal. The service captures client information (IP, MAC address, user agent) and sends it to the remote server.
+A Node.js service that creates a proxy server to intercept HTTP requests and redirect users to a captive portal. The service captures client information (IP, MAC address, user agent) and sends it to the server.
 
 #### Key Features
 - HTTP request interception
@@ -312,15 +212,17 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 #### Installation & Setup
 
 1. **Copy Code to a file**
-   - Create a file and paste the contents of [`http-redirect-proxy-node/captive-http-redirect-proxy.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/http-redirect-proxy-node/captive-http-redirect-proxy.js) into it.
+   - Copy content of this folder to RPi [`http-redirect-proxy-node/`](https://github.com/ganainy/raspberrypi-captive-portal/blob/local-captive/http-redirect-proxy-node/) into it.
 
    ```bash
-   sudo nano /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
+   sudo mkdir /opt/http-redirect-proxy-node/
+   cd /opt/http-redirect-proxy-node/
    ```
 
 2. **Install Dependencies**
    ```bash
-   npm install
+   sudo npm init -y
+   sudo npm install http-proxy -y
    ```
 
 3. **Create Systemd Service**
@@ -335,8 +237,8 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
    After=network.target
 
    [Service]
-   ExecStart=/usr/bin/node /path/to/your/proxy-server.js
-   WorkingDirectory=/path/to/your/directory
+   ExecStart=/usr/bin/node /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
+   WorkingDirectory=/opt/http-redirect-proxy-node
    Restart=always
    User=root
    Group=root
@@ -360,10 +262,7 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
    sudo systemctl status captive-portal
    ```
 
-#### Configuration
-- Default port: 8080
-- Default IP: 192.168.1.1
-- Captive portal target: http://[YOUR_CAPTIVE_SUBDOMAIN]
+
 
 ---
 ### Step 9:(Optional: helpful SQLite Commands to see the Sessions database) 

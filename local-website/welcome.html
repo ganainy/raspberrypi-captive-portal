@@ -109,17 +109,6 @@
             <p>You now have internet access for one hour. You can safely close this page.</p>
         `;
 
-        if (cookieInfo.referer && cookieInfo.original_url) {
-            const continueLink = document.createElement('a');
-            continueLink.href = cookieInfo.referer || cookieInfo.original_url;
-            continueLink.classList.add('link');
-            continueLink.textContent = 'Continue where you left off';
-            continueLinkContainer.appendChild(continueLink);
-            console.log(`Continue link created with URL: ${continueLink.href}`);
-        } else {
-            console.log('No referer or original URL found to create a continue link.');
-        }
-
         // In both cases, show the internet access message
         continueLinkContainer.insertAdjacentHTML('beforeend', internetAccessMessage);
         console.log('Displayed internet access message.');

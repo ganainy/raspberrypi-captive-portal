@@ -6,7 +6,7 @@ const { exec } = require("child_process");
 const proxy = httpProxy.createProxyServer({});
 
 // Define the target server for the captive portal
-const captivePortalTarget = "http://13.61.79.152";
+const captivePortalTarget = "http://192.168.1.1";
 
 // Start an HTTP server
 const server = http.createServer(async (req, res) => {
@@ -21,7 +21,7 @@ const server = http.createServer(async (req, res) => {
     let clientMac = await getClientMac(clientIp); // Retrieve the MAC address
     if (!clientMac) clientMac = "unknown"; // Fallback if MAC address is unavailable
 
-    if (hostHeader === "captive.ganainy.online") {
+    if (hostHeader === "captive.local") {
       // Build query parameters for captive portal target
       const params = new URLSearchParams();
       params.set("ip", clientIp);
@@ -36,7 +36,7 @@ const server = http.createServer(async (req, res) => {
       proxy.web(req, res, { target: `${captivePortalTarget}?${params.toString()}` });
     } else {
       // Redirect to captive.ganainy.online
-      console.log(`Redirecting: ${hostHeader} -> captive.ganainy.online`);
+      console.log(`Redirecting: ${hostHeader} -> captive.local`);
       const params = new URLSearchParams();
       params.set("ip", clientIp);
       params.set("mac", clientMac);
@@ -45,7 +45,7 @@ const server = http.createServer(async (req, res) => {
       params.set("http_method", httpMethod);
       params.set("referer", encodeURIComponent(referer));
 
-      res.writeHead(302, { Location: `http://captive.ganainy.online?${params.toString()}` });
+      res.writeHead(302, { Location: `http://captive.local?${params.toString()}` });
       res.end();
     }
   } catch (err) {
@@ -109,6 +109,6 @@ function getClientMac(ipAddress) {
   });
 }
 
-server.listen(8080, "192.168.1.1", () => {
-  console.log("Proxy server is running on http://192.168.1.1:8080");
+server.listen(8080, "0.0.0.0", () => {
+  console.log("Proxy server is running locally on all interfaces port 8080");
 });

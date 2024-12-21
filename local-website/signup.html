@@ -121,7 +121,7 @@
             console.log(`Attempting to sign up with username: ${username}`);
 
             try {
-                const response = await fetch('https://auth.ganainy.online/signup_api', { // Updated API URL for EC2 instance
+                const response = await fetch('https://captive.local:5000/signup_api', { // Updated API URL for EC2 instance
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

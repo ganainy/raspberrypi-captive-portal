@@ -137,7 +137,7 @@
                 };
                                 console.log('Cookie information:', cookieInfo);
 
-                const response = await fetch('https://auth.ganainy.online/login_api', { // Use the EC2 domain for auth API
+                const response = await fetch('https://captive.local:5000/login_api', { // Use the EC2 domain for auth API
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
