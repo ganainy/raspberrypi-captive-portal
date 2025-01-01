@@ -2,60 +2,112 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Login</title>
     <style>
+        /* Base styles for the body */
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
             margin: 0;
+            padding: 0;
             background-color: #f0f2f5;
+            height: 100vh; /* Ensure full viewport height */
+            display: grid;
+            align-items: center; /* Vertical centering */
+            justify-content: center; /* Horizontal centering */
+            overflow: hidden;
         }
-        .login-container {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
+
+        
+
+        /* Input fields styling */
         input[type="text"], input[type="password"] {
             width: 100%;
             padding: 0.75rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1rem; 
             border-radius: 4px;
             border: 1px solid #ccc;
+            font-size: 1rem;
         }
+
+        /* Button styling */
         button {
             width: 100%;
             padding: 0.75rem;
+            margin-top: 1rem; 
+            margin-bottom: 1rem; 
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
+            font-size: 1rem;
             cursor: pointer;
         }
+
         button:hover {
             background-color: #0056b3;
         }
+
+        /* Terms and conditions section styling */
         .terms {
             text-align: left;
-            margin-top: 1rem;
+            margin-top: 2rem; 
             font-size: 0.875rem;
         }
+
         .terms a {
             color: #007bff;
             text-decoration: none;
         }
+
+        .terms a:hover {
+            text-decoration: underline;
+        }
+
+        /* Heading styling */
+        h2 {
+            margin-bottom: 2rem; 
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        /* Paragraph styling */
+        p {
+            margin-top: 0rem; 
+            font-size: 0.875rem;
+        }
+
+        p a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        p a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive adjustments for small screens */
+        @media (max-width: 768px) {
+            button {
+                font-size: 0.9rem;
+                padding: 0.65rem;
+            }
+
+            input[type="text"], input[type="password"] {
+                font-size: 0.9rem;
+                padding: 0.65rem;
+            }
+
+            h2 {
+                font-size: 1.25rem;
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="login-container">
-        <h2 style="text-align: center; margin-bottom: 2rem;">WiFi Login</h2>
+        <h2>Captive Portal Login</h2>
         <form id="loginForm">
             <div class="form-group">
                 <label for="username">Username</label>
@@ -74,10 +126,12 @@
             <button type="submit">Login</button>
             <div id="error" class="error"></div>
         </form>
-        <p style="text-align:center;">
+        <p>
             <a href="/signup.html">No account? Sign up here!</a>
         </p>
     </div>
+</body>
+</html>
 
     <script>
         // Simple console.log for logging

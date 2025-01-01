@@ -7,30 +7,129 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
             margin: 0;
+            padding: 0;
             background-color: #f0f2f5;
         }
-        .tos-container {
+
+        main {
             background: white;
+            margin: 10vh auto; /* Center vertically with top margin */
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 600px;
-            text-align: center;
-            max-height: 80vh;
-            overflow-y: auto;
+            width: 90%; /* Default width */
+            max-width: 600px; /* Max width for larger screens */
+            box-sizing: border-box; /* Ensure padding fits inside */
+            overflow-y: auto; /* Scrollable if content exceeds */
+            max-height: 80vh; /* Prevent overflow on smaller screens */
         }
+
+        h2 {
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+            color: #333;
+            text-align: center;
+        }
+
         .tos-content {
-            text-align: left;
+            text-align: center;
+            font-size: 1rem;
+            line-height: 1.6;
             margin-bottom: 1rem;
+        }
+
+        .tos-content ul {
+            padding-left: 1.5rem;
+            list-style-type: disc;
+            list-style-position: inside;
+        }
+
+        .tos-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .actions {
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+
+        .actions label {
+            font-size: 0.95rem;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .actions button {
+            padding: 0.75rem 1.5rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .actions button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .download-link {
+            display: block;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .download-link a {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .download-link a:hover {
+            text-decoration: underline;
+        }
+
+
+        /* Tablet and Mobile Styling */
+        @media (max-width: 768px) {
+            main {
+                margin: 5vh auto; /* Adjust margin for smaller screens */
+                padding: 1.5rem; /* Reduce padding */
+                max-width: 95%; /* Use more screen space */
+            }
+
+            h2 {
+                font-size: 1.5rem; /* Slightly smaller header */
+            }
+
+            .tos-content {
+                font-size: 0.95rem; /* Smaller text */
+            }
+        }
+
+        /* Small Phones Styling */
+        @media (max-width: 480px) {
+            main {
+                margin: 5vh auto;
+                padding: 1rem; /* Compact padding */
+            }
+
+            h2 {
+                font-size: 1.25rem; /* Smaller header size */
+            }
+
+            .tos-content {
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
+
+
 <body>
     <div class="tos-container">
         <h2>Terms of Service</h2>
@@ -42,8 +141,29 @@
                 <li>The network administrators are not responsible for any content you access.</li>
                 <li>Any misuse may result in your access being revoked.</li>
             </ul>
-            <p>If you agree to the terms, go back to the login page and check the box to proceed.</p>
         </div>
     </div>
+    <div class="actions">
+        <label>
+            <input type="checkbox" id="confirm-tos" onclick="toggleAcceptButton()"> <strong>I have read and agree to the Terms of Service</strong>
+        </label>
+        <button id="accept-btn" disabled onclick="acceptTos(); window.location.href = '/login.html';">Accept</button>
+    </div>
+    <div class="download-link">
+        <a href="assets/terms-of-service.pdf" download>Download Terms of Service as PDF</a>
+    </div>
 </body>
+
+<script>
+    function toggleAcceptButton() {
+        const checkbox = document.getElementById('confirm-tos');
+        const button = document.getElementById('accept-btn');
+        button.disabled = !checkbox.checked;
+    }
+
+    function acceptTos() {
+        alert('Thank you for accepting the Terms of Service, you will now be redirected to login!');
+    }
+</script>
+
 </html>
