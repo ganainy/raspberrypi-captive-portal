@@ -35,7 +35,6 @@
 4. Create A records:
    ```
    [YOUR_CAPTIVE_SUBDOMAIN] → [Your Elastic IP]
-   [YOUR_AUTH_SUBDOMAIN]→ [Your Elastic IP]
    ```
 
 ## Server Configuration
@@ -72,78 +71,10 @@
    ```bash
    sudo nano /etc/apache2/sites-available/[YOUR_CAPTIVE_SUBDOMAIN].conf
    ```
-   Add:
-   ```apache
-   <VirtualHost *:443>
-       ServerAdmin webmaster@localhost
-       ServerName [YOUR_CAPTIVE_SUBDOMAIN]
-       DocumentRoot /var/www/captive
-       ErrorLog ${APACHE_LOG_DIR}/error.log
-       CustomLog ${APACHE_LOG_DIR}/access.log combined
-       SSLEngine on
-       SSLCertificateFile /etc/letsencrypt/live/[YOUR_DOMAIN]/fullchain.pem
-       SSLCertificateKeyFile /etc/letsencrypt/live/[YOUR_DOMAIN]/privkey.pem
-       <FilesMatch "\.(?:cgi|shtml|phtml|php)$">
-           SSLOptions +StdEnvVars
-       </FilesMatch>
-       <Directory /usr/lib/cgi-bin>
-           SSLOptions +StdEnvVars
-       </Directory>
-       # Allow CORS for all origins
-       <Directory /var/www/captive>
-           Header set Access-Control-Allow-Origin "*"
-           Header set Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
-           Header set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-       </Directory>
-   </VirtualHost>
+   Copy the contents from `captive-website/server/apache-config.example.conf` into this new file.
+   **Important:** Remember to replace placeholders like `your.domain.com` with your actual domain/subdomain and update the paths to your SSL certificate files (`SSLCertificateFile` and `SSLCertificateKeyFile`).
 
-   <VirtualHost *:80>
-       ServerAdmin webmaster@localhost
-       ServerName [YOUR_CAPTIVE_SUBDOMAIN]
-       # Redirect HTTP traffic to HTTPS
-       Redirect permanent / https://[YOUR_CAPTIVE_SUBDOMAIN]/
-       ErrorLog ${APACHE_LOG_DIR}/error.log
-       CustomLog ${APACHE_LOG_DIR}/access.log combined
-   </VirtualHost>
-   ```
-
-2. Create virtual host for auth server:
-   ```bash
-   sudo nano /etc/apache2/sites-available/[YOUR_AUTH_SUBDOMAIN].conf
-   ```
-   Add:
-   ```apache
-   <VirtualHost *:80>
-       ServerName [YOUR_AUTH_SUBDOMAIN]
-       # Redirect HTTP to HTTPS
-       RewriteEngine On
-       RewriteRule ^(.*)$ https://[YOUR_AUTH_SUBDOMAIN]$1 [R=301,L]
-   </VirtualHost>
-
-   <VirtualHost *:443>
-       ServerName [YOUR_AUTH_SUBDOMAIN]
-       # Enable SSL for the reverse proxy
-       SSLProxyEngine On
-       # SSL Configuration
-       SSLEngine On
-       SSLCertificateFile /etc/letsencrypt/live/[YOUR_DOMAIN]/fullchain.pem
-       SSLCertificateKeyFile /etc/letsencrypt/live/[YOUR_DOMAIN]/privkey.pem
-       # Proxy configuration
-       ProxyPreserveHost On
-       ProxyPass / http://127.0.0.1:4000/
-       ProxyPassReverse / http://127.0.0.1:4000/
-       # Allow CORS for all origins
-       <Directory /var/www/captive>
-           Header set Access-Control-Allow-Origin "*"
-           Header set Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
-           Header set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-       </Directory>
-       ErrorLog ${APACHE_LOG_DIR}/auth_error.log
-       CustomLog ${APACHE_LOG_DIR}/auth_access.log combined
-   </VirtualHost>
-   ```
-
-3. Enable additional required Apache modules:
+2. Enable additional required Apache modules:
    ```bash
    sudo a2enmod ssl
    sudo a2enmod headers
@@ -152,36 +83,22 @@
    sudo a2enmod rewrite
    ```
 
-Note: Replace `[YOUR_DOMAIN],[YOUR_AUTH_SUBDOMAIN],[YOUR_CAPTIVE_SUBDOMAIN]` with your actual domain name in the SSL certificate paths. Also ensure that you have already obtained SSL certificates using Certbot (see Wildcard SSL Certificate Setup with DNS Challenge below) before activating these configurations.
+Note: Replace `[YOUR_CAPTIVE_SUBDOMAIN]` with your actual domain name in the SSL certificate paths. Also ensure that you have already obtained SSL certificates using Certbot (see Wildcard SSL Certificate Setup with DNS Challenge below) before activating these configurations.
 
 4. Create web directories:
    ```bash
-   sudo mkdir -p /var/www/captive
-   sudo mkdir -p /var/www/auth
+   sudo mkdir -p /var/www/captive/client
    ```
 
 5. Set permissions:
    ```bash
-   sudo chown -R www-data:www-data /var/www/captive
-   sudo chown -R www-data:www-data /var/www/auth
-   ```
-
-### SQLite Setup
-1. Install SQLite:
-   ```bash
-   sudo apt install sqlite3 -y
-   ```
-
-3. Create users database:
-   ```bash
-   sudo sqlite3 /var/www/auth/users.db
+   sudo chown -R www-data:www-data /var/www/captive/client
    ```
 
 ### Enable Sites and Restart Apache
 1. Enable virtual hosts:
    ```bash
    sudo a2ensite [YOUR_CAPTIVE_SUBDOMAIN].conf
-   sudo a2ensite [YOUR_AUTH_SUBDOMAIN].conf
    ```
 
 2. Disable default site:
@@ -267,26 +184,28 @@ Notes:
 
 ### 1. Create Project Directory
 ```bash
-mkdir auth_api
-cd auth_api
+# Example: Create a directory to hold the server-side code on the EC2 instance
+sudo mkdir -p /opt/captive-portal/server 
+cd /opt/captive-portal/server 
 ```
 
 ### 2. Initialize Project
 ```bash
+# Initialize npm project within the server directory
 npm init -y
 ```
 
 ### 3. Install Dependencies
 ```bash
-npm install express mysql2 bcryptjs cors dotenv axios
+npm install
 ```
 
 ### 4. Create Configuration Files
-1. Create `.env` file:
+1. Create `.env` file in the server project directory:
 ```bash
-sudo nano .env # Or place it in the project directory: /path/to/your/project/.env
+sudo nano /opt/captive-portal/server/.env 
 ```
-Add the required variables based on `remote-auth-server/.env.example`:
+Add the required variables based on `captive-website/server/.env.example`:
 ```env
 PORT=4000 # Or your desired port
 DB_HOST=localhost
@@ -299,13 +218,12 @@ HTTPS_CERT_PATH=/etc/letsencrypt/live/[YOUR_DOMAIN]/fullchain.pem
 *Make sure to replace placeholders with actual values.*
 
 ### 5. Create API File
-1. Create `auth_api.js` in your project directory (e.g., `/opt/captive-portal-auth-api/auth_api.js`):
+1. Create `auth_api.js` in your server project directory (e.g., `/opt/captive-portal/server/auth_api.js`):
 ```bash
-sudo mkdir -p /opt/captive-portal-auth-api # Example directory
-sudo nano /opt/captive-portal-auth-api/auth_api.js
+sudo nano /opt/captive-portal/server/auth_api.js
 ```
-2. Copy the code from [`remote-auth-server/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote%20auth%20server/auth_api.js) into `auth_api.js`.
-*Note: The code now reads configuration from the `.env` file.*
+2. Copy the code from `captive-website/server/auth_api.js` into this file.
+*Note: The code reads configuration from the `.env` file.*
 
 ### 6. Create MySQL Database and User
 ```bash
@@ -321,27 +239,26 @@ EXIT;
 ### 7. Run the Auth Server as a Service (systemd)
 1. **Create a systemd service file**:
    ```bash
-   sudo nano /etc/systemd/system/captiveportal-auth-api.service
+   sudo nano /etc/systemd/system/captiveportal-server-api.service
    ```
 
 2. **Add the following content**:
    ```ini
    [Unit]
-   Description=Captive Portal Auth API Server
+   Description=Captive Portal Server Auth API
    After=network.target mysql.service # Ensure network and DB are up
 
    [Service]
-   ExecStart=/usr/bin/node /opt/captive-portal-auth-api/auth_api.js
-   WorkingDirectory=/opt/captive-portal-auth-api
+   ExecStart=/usr/bin/node /var/www/captive-website/server/auth_api.js
+   WorkingDirectory=/var/www/captive-website/server
    Restart=always
-   User=ubuntu # Or another non-root user if preferred
-   Group=www-data # Or the group that owns the project files
+   User=root
+   Group=root
    Environment=NODE_ENV=production
-   # Optionally load .env file if placed in WorkingDirectory
-   # EnvironmentFile=/opt/captive-portal-auth-api/.env 
+   EnvironmentFile=/var/www/captive-website/server/.env
    StandardOutput=syslog
    StandardError=syslog
-   SyslogIdentifier=captiveportal-auth-api
+   SyslogIdentifier=captiveportal-server-api
 
    [Install]
    WantedBy=multi-user.target
@@ -351,36 +268,36 @@ EXIT;
 3. **Reload systemd, enable and start the service**:
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl enable captiveportal-auth-api.service
-   sudo systemctl start captiveportal-auth-api.service
+   sudo systemctl enable captiveportal-server-api.service
+   sudo systemctl start captiveportal-server-api.service
    ```
 
 4. **Check the service status**:
    ```bash
-   sudo systemctl status captiveportal-auth-api.service
+   sudo systemctl status captiveportal-server-api.service
    ```
-   *Check logs using `journalctl -fu captiveportal-auth-api.service`.*
+   *Check logs using `journalctl -fu captiveportal-server-api.service`.*
 
 ### 8. Apache Reverse Proxy Update
-Ensure your Apache virtual host for `[YOUR_AUTH_SUBDOMAIN]` correctly proxies requests to the port defined in your `.env` file (default `4000`):
+Ensure your Apache virtual host for `[YOUR_CAPTIVE_SUBDOMAIN]` correctly proxies requests starting with `/api/` to the Node.js auth server running on the port defined in your `.env` file (default `4000`):
    ```apache
-   # ... inside <VirtualHost *:443> for [YOUR_AUTH_SUBDOMAIN] ...
-   ProxyPass / http://127.0.0.1:4000/ 
-   ProxyPassReverse / http://127.0.0.1:4000/
+   # ... inside <VirtualHost *:443> for [YOUR_CAPTIVE_SUBDOMAIN] ...
+   ProxyPass /api/ https://127.0.0.1:4000/
+   ProxyPassReverse /api/ https://127.0.0.1:4000/
    # ... rest of config ...
    ```
    *Restart Apache after changes: `sudo systemctl restart apache2`*
 
 ### 9. Test the API
 ```bash
-curl https://[YOUR_AUTH_SUBDOMAIN]/hello_api
+curl https://[YOUR_CAPTIVE_SUBDOMAIN]/api/hello_api
 ```
 
 Notes:
 - The Auth server API will run on port 4000 by default
 - Users table will be created automatically
 - API endpoints:
-  - POST `/login_api`
-  - POST `/signup_api`
-  - GET `/users_api` (debug only, delete fron [`remote-auth-server/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote%20auth%20server/auth_api.js) code if used in production)
-  - GET `/hello_api` (debug only)
+  - POST `/api/login_api`
+  - POST `/api/signup_api`
+  - GET `/api/users_api` (debug only, delete from `captive-website/server/auth_api.js` code if used in production)
+  - GET `/api/hello_api` (debug only)

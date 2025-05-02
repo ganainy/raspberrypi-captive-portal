@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: grid;
+            place-items: center;
+            /* Centers the content horizontally and vertically */
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+
+
+
+        h2 {
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+            color: #333;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .terms {
+            text-align: left;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .terms a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        p {
+            margin-top: 1rem;
+        }
+
+        p a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        p a:hover {
+            text-decoration: underline;
+        }
+
+        /* Tablet and Phone Styling */
+        @media (max-width: 768px) {
+            .signup-container {
+                max-width: 90%;
+                /* Reduce width for smaller screens */
+                padding: 1.5rem;
+                /* Less padding for mobile devices */
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            input[type="text"],
+            input[type="password"],
+            button {
+                font-size: 0.9rem;
+                /* Smaller font size */
+                padding: 0.65rem;
+                /* Adjust padding */
+            }
+
+            .terms {
+                font-size: 0.8rem;
+                /* Slightly smaller text */
+            }
+        }
+
+        /* Small Phones Styling */
+        @media (max-width: 480px) {
+            h2 {
+                font-size: 1.25rem;
+                /* Even smaller for tiny screens */
+            }
+
+            .signup-container {
+                padding: 1rem;
+                /* Compact padding for very small devices */
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+    <div class="signup-container">
+        <h2>Sign Up</h2>
+        <form id="signupForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Sign Up</button>
+            <div id="error" class="error"></div>
+        </form>
+        <p>
+            <a href="/login.html">Already have an account? Log in</a>
+        </p>
+    </div>
+</body>
+
+</html>
+
+
+<script>
+
+    // Utility function to get a cookie
+    function getCookie(name) {
+        console.log(`Getting cookie for ${name}...`);
+        const cookieName = `${name}=`;
+        const decodedCookie = decodeURIComponent(document.cookie);
+        const cookieArray = decodedCookie.split(';');
+
+        for (let i = 0; i < cookieArray.length; i++) {
+            let cookie = cookieArray[i];
+            while (cookie.charAt(0) === ' ') {
+                cookie = cookie.substring(1);
+            }
+            if (cookie.indexOf(cookieName) === 0) {
+                console.log(`Cookie found: ${cookie.substring(cookieName.length, cookie.length)}`);
+                return cookie.substring(cookieName.length, cookie.length);
+            }
+        }
+        console.log(`Cookie for ${name} not found.`);
+        return "";
+    }
+
+    // Get cookie information
+    const cookieInfo = {
+        mac: getCookie('mac'),
+        ip: getCookie('ip'),
+        agent: getCookie('agent'),
+        original_url: getCookie('original_url'),
+        http_method: getCookie('http_method'),
+        referer: getCookie('referer'),
+        timestamp: getCookie('params_set_timestamp')
+    };
+
+    console.log('Cookie information:', cookieInfo);
+
+    // Form submission handling
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        console.log('Sign up form submitted.');
+
+        const formData = new FormData(e.target);
+        const username = formData.get('username');
+        const password = formData.get('password');
+
+        console.log(`Attempting to sign up with username: ${username}`);
+
+        try {
+            const response = await fetch('/api/signup_api', { // Updated API URL to relative path
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                    cookieInfo: cookieInfo
+                })
+            });
+
+            if (response.ok) {
+                console.log('Sign-up successful, redirecting to login page...');
+                window.location.href = '/login.html'; // Redirect to login page after successful sign-up
+            } else {
+                const errorText = await response.text();
+                console.log('Sign-up failed:', errorText);
+                document.getElementById('error').textContent = `Sign-up failed: ${errorText}`;
+            }
+        } catch (error) {
+            console.error('Error during sign-up request:', error);
+            document.getElementById('error').textContent = 'Connection error: ' + error.message;
+        }
+    });
+
+</script>
+</body>
+
+</html>

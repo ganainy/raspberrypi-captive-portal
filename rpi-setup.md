@@ -13,6 +13,8 @@
 sudo apt update
 sudo apt upgrade
 sudo apt install -y iptables iptables-persistent dnsmasq tcpdump nodejs npm
+
+> **Troubleshooting Note:** If your Raspberry Pi does not have internet access after connecting the Ethernet cable, check the network adapter settings on the machine providing the internet connection (e.g., your laptop). Ensure that internet connection sharing is enabled for the Ethernet adapter connected to the Pi.
 ```
 ---
 ## Step 2: Configure `dnsmasq`
@@ -403,29 +405,5 @@ To view the logs for your three captive portal services at once:
   ```
 
 ---
-### Step 9:(Optional: helpful SQLite Commands to see the Sessions database) 
-- Open the database:
-  ```bash
-  sqlite3 /path-to-db/[DB_NAME].db
-  ```
-- Enable better formatting:
-  ```sql
-  .headers on
-  .mode column
-  ```
-- View tables:
-  ```sql
-  .tables
-  ```
-- Show table schema:
-  ```sql
-  .schema <table_name>
-  ```
-- View table content:
-  ```sql
-  SELECT * FROM <table_name>;
-  ```
-- Exit SQLite:
-  ```sql
-  .exit
-  ```
+
+See [sqlite-commands.md](./sqlite-commands.md) for helpful commands to inspect the local session database.

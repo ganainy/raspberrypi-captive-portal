@@ -1,3 +1,4 @@
+console.log("Script started!"); // Add this at the top
 require('dotenv').config();  // Load environment variables from .env file
 
 const express = require('express');
@@ -10,6 +11,7 @@ const app = express();
 const axios = require('axios');
 
 // Environment variable checks
+console.log("Checking environment variables..."); // Before the env checks
 const requiredEnvVars = ['PORT', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'HTTPS_KEY_PATH', 'HTTPS_CERT_PATH'];
 for (const varName of requiredEnvVars) {
   if (!process.env[varName]) {
@@ -17,6 +19,7 @@ for (const varName of requiredEnvVars) {
     process.exit(1);
   }
 }
+console.log("Environment variables checked.");
 
 // Use environment variable for port
 const PORT = process.env.PORT;
