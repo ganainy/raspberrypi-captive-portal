@@ -130,8 +130,8 @@
        SSLCertificateKeyFile /etc/letsencrypt/live/[YOUR_DOMAIN]/privkey.pem
        # Proxy configuration
        ProxyPreserveHost On
-       ProxyPass / https://127.0.0.1:3000/
-       ProxyPassReverse / https://127.0.0.1:3000/
+       ProxyPass / http://127.0.0.1:4000/
+       ProxyPassReverse / http://127.0.0.1:4000/
        # Allow CORS for all origins
        <Directory /var/www/captive>
            Header set Access-Control-Allow-Origin "*"
@@ -284,87 +284,103 @@ npm install express mysql2 bcryptjs cors dotenv axios
 ### 4. Create Configuration Files
 1. Create `.env` file:
 ```bash
-nano .env
+sudo nano .env # Or place it in the project directory: /path/to/your/project/.env
 ```
-Add:
+Add the required variables based on `remote-auth-server/.env.example`:
 ```env
-PORT=3000
+PORT=4000 # Or your desired port
 DB_HOST=localhost
 DB_USER=[YOUR_MYSQL_USER]
 DB_PASSWORD=[YOUR_MYSQL_PASSWORD]
 DB_NAME=[YOUR_DATABASE_NAME]
+HTTPS_KEY_PATH=/etc/letsencrypt/live/[YOUR_DOMAIN]/privkey.pem
+HTTPS_CERT_PATH=/etc/letsencrypt/live/[YOUR_DOMAIN]/fullchain.pem
 ```
+*Make sure to replace placeholders with actual values.*
 
 ### 5. Create API File
-1. Create `auth_api.js`:
+1. Create `auth_api.js` in your project directory (e.g., `/opt/captive-portal-auth-api/auth_api.js`):
 ```bash
-nano auth_api.js
+sudo mkdir -p /opt/captive-portal-auth-api # Example directory
+sudo nano /opt/captive-portal-auth-api/auth_api.js
 ```
-2. Copy the provided code from [`/remote-website/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote%20auth%20server/auth_api.js) into `auth_api.js`
-3. Replace `[YOUR_DOMAIN]` with your actual domain in the SSL paths
+2. Copy the code from [`remote-auth-server/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote%20auth%20server/auth_api.js) into `auth_api.js`.
+*Note: The code now reads configuration from the `.env` file.*
 
-### 6. Create MySQL Database
+### 6. Create MySQL Database and User
 ```bash
-mysql -u root -p
+sudo mysql -u root -p
 CREATE DATABASE [YOUR_DATABASE_NAME];
+CREATE USER '[YOUR_MYSQL_USER]'@'localhost' IDENTIFIED BY '[YOUR_MYSQL_PASSWORD]';
+GRANT ALL PRIVILEGES ON [YOUR_DATABASE_NAME].* TO '[YOUR_MYSQL_USER]'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
 ```
+*The `auth_api.js` script will create the necessary `users` table automatically.*
 
-### 7. Run the Auth Server
+### 7. Run the Auth Server as a Service (systemd)
 1. **Create a systemd service file**:
-   Create a new service file in `/etc/systemd/system/`:
-
    ```bash
-   sudo nano /etc/systemd/system/auth-api.service
+   sudo nano /etc/systemd/system/captiveportal-auth-api.service
    ```
 
-2. **Add the following content** to the service file:
-
+2. **Add the following content**:
    ```ini
    [Unit]
-   Description=Auth API Server
-   After=network.target
+   Description=Captive Portal Auth API Server
+   After=network.target mysql.service # Ensure network and DB are up
 
    [Service]
-   ExecStart=/usr/bin/node /path/to/auth_api.js
-   WorkingDirectory=/path/to/your/project
-   Environment=NODE_ENV=production
+   ExecStart=/usr/bin/node /opt/captive-portal-auth-api/auth_api.js
+   WorkingDirectory=/opt/captive-portal-auth-api
    Restart=always
-   User=your_user
-   Group=your_group
-   # Adjust permissions as needed
+   User=ubuntu # Or another non-root user if preferred
+   Group=www-data # Or the group that owns the project files
+   Environment=NODE_ENV=production
+   # Optionally load .env file if placed in WorkingDirectory
+   # EnvironmentFile=/opt/captive-portal-auth-api/.env 
+   StandardOutput=syslog
+   StandardError=syslog
+   SyslogIdentifier=captiveportal-auth-api
 
    [Install]
    WantedBy=multi-user.target
    ```
+   *Replace paths and user/group as needed for your setup.*
 
-   Replace `/path/to/auth_api.js` with the actual path to your `auth_api.js` file and `your_user` and `your_group` with the appropriate user and group for the server process.
-
-3. **Reload systemd and enable the service**:
-
+3. **Reload systemd, enable and start the service**:
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl enable auth-api.service
-   sudo systemctl start auth-api.service
+   sudo systemctl enable captiveportal-auth-api.service
+   sudo systemctl start captiveportal-auth-api.service
    ```
 
-4. **Check the service status** to ensure it is running:
-
+4. **Check the service status**:
    ```bash
-   sudo systemctl status auth-api.service
+   sudo systemctl status captiveportal-auth-api.service
    ```
+   *Check logs using `journalctl -fu captiveportal-auth-api.service`.*
 
-This will ensure that your `auth_api.js` server runs as a background service and restarts automatically if it crashes or if the system reboots.
+### 8. Apache Reverse Proxy Update
+Ensure your Apache virtual host for `[YOUR_AUTH_SUBDOMAIN]` correctly proxies requests to the port defined in your `.env` file (default `4000`):
+   ```apache
+   # ... inside <VirtualHost *:443> for [YOUR_AUTH_SUBDOMAIN] ...
+   ProxyPass / http://127.0.0.1:4000/ 
+   ProxyPassReverse / http://127.0.0.1:4000/
+   # ... rest of config ...
+   ```
+   *Restart Apache after changes: `sudo systemctl restart apache2`*
 
-### 8. Test the API
+### 9. Test the API
 ```bash
 curl https://[YOUR_AUTH_SUBDOMAIN]/hello_api
 ```
 
 Notes:
-- The Auth server API will run on port 3000 by default
+- The Auth server API will run on port 4000 by default
 - Users table will be created automatically
 - API endpoints:
   - POST `/login_api`
   - POST `/signup_api`
-  - GET `/users_api` (debug only, delete fron [`/remote-website/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote%20auth%20server/auth_api.js) code if used in production)
+  - GET `/users_api` (debug only, delete fron [`remote-auth-server/auth_api.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/remote%20auth%20server/auth_api.js) code if used in production)
   - GET `/hello_api` (debug only)

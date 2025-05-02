@@ -11,20 +11,41 @@
  * for those sessions after one hour.
  */
 
+require('dotenv').config(); // Load environment variables from .env file
 
 const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const bodyParser = require("body-parser");
 const { exec } = require("child_process");
 
+// Environment variable checks
+const requiredEnvVarsListener = [
+  'LISTENER_PORT',
+  'DB_PATH',
+  'SESSION_DURATION_MS',
+  'CHECK_INTERVAL_MS',
+  'WLAN_INTERFACE',
+  'REDIRECT_TARGET_IP',
+  'REDIRECT_TARGET_PORT'
+];
+for (const varName of requiredEnvVarsListener) {
+  if (!process.env[varName]) {
+    console.error(`Error: Environment variable ${varName} is not set. Please define it in the .env file.`);
+    process.exit(1);
+  }
+}
+
 const app = express();
-const port = 4001;
+// Use environment variable for port
+const port = process.env.LISTENER_PORT;
 
 // Middleware
 app.use(bodyParser.json());
 
 // Local SQLite Database Setup
-const db = new sqlite3.Database("./local.db", (err) => {
+// Use environment variable for DB path
+const dbPath = process.env.DB_PATH;
+const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error("Error opening database:", err.message);
   } else {
@@ -52,6 +73,16 @@ db.serialize(() => {
   `);
   console.log("Sessions table ensured.");
 });
+
+// Use environment variables for session duration and check interval
+const sessionDurationMs = parseInt(process.env.SESSION_DURATION_MS, 10);
+const checkIntervalMs = parseInt(process.env.CHECK_INTERVAL_MS, 10);
+
+// Validate parsed numbers
+if (isNaN(sessionDurationMs) || isNaN(checkIntervalMs)) {
+  console.error('Error: SESSION_DURATION_MS and CHECK_INTERVAL_MS must be valid numbers.');
+  process.exit(1);
+}
 
 /**
  * Route to receive data from remote server
@@ -107,7 +138,7 @@ const activateOrUpdateSession = async (user_id, mac_address, ip, agent, original
                SET mac_address = ?, login_timestamp = CURRENT_TIMESTAMP, ip = ?, agent = ?, original_url = ?, http_method = ?, referer = ?, username = ? 
                WHERE session_id = ?`,
               [mac_address, ip, agent, original_url, http_method, referer, username, existingSession.session_id],
-              function(err) {
+              function (err) {
                 if (err) {
                   console.error('Error updating session:', err);
                   return reject(new Error(`Session update failed: ${err.message}`));
@@ -122,7 +153,7 @@ const activateOrUpdateSession = async (user_id, mac_address, ip, agent, original
               `INSERT INTO sessions (user_id, username, mac_address, login_timestamp, status, ip, agent, original_url, http_method, referer) 
                VALUES (?, ?, ?, CURRENT_TIMESTAMP, "active", ?, ?, ?, ?, ?)`,
               [user_id, username, mac_address, ip, agent, original_url, http_method, referer],
-              function(err) {
+              function (err) {
                 if (err) {
                   console.error('Error creating session:', err);
                   return reject(new Error(`Session creation failed: ${err.message}`));
@@ -147,13 +178,13 @@ app.post('/activate-session', validateSessionFields, async (req, res) => {
   try {
     console.log("Activating session...");
     const sessionId = await activateOrUpdateSession(
-      user_id, 
-      mac_address, 
-      ip, 
-      agent, 
-      original_url, 
-      http_method, 
-      referer, 
+      user_id,
+      mac_address,
+      ip,
+      agent,
+      original_url,
+      http_method,
+      referer,
       username
     );
 
@@ -176,7 +207,7 @@ app.post('/activate-session', validateSessionFields, async (req, res) => {
 // Route to deactivate a session and revoke internet access
 const deactivateSession = (userId, ip) => {
   console.log(`Deactivating session for user ${userId}...`);
-  
+
   // Delete the active session for the user
   db.run(`
     DELETE FROM sessions 
@@ -186,10 +217,10 @@ const deactivateSession = (userId, ip) => {
       console.error('Error deleting session:', err);
     } else {
       console.log(`Active session for user ${userId} deleted.`);
-      
-      // Create a new session with login_timestamp set to now and logout_timestamp set to one hour later
+
+      // Create a new session with login_timestamp set to now and logout_timestamp set based on SESSION_DURATION_MS
       const loginTimestamp = new Date().toISOString();
-      const logoutTimestamp = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour later
+      const logoutTimestamp = new Date(Date.now() + sessionDurationMs).toISOString(); // Use configured duration
 
       db.run(`
         INSERT INTO sessions (user_id, status, login_timestamp, logout_timestamp) 
@@ -225,9 +256,7 @@ setInterval(() => {
       deactivateSession(session.user_id, session.ip);
     });
   });
-}, 30000);
-
-
+}, checkIntervalMs); // Use configured interval
 
 
 // Endpoint for testing the connection between RPi and remote server
@@ -235,6 +264,12 @@ app.get('/test', (req, res) => {
   console.log("Testing connection...");
   res.status(200).json({ message: 'Connection between RPi and server is up' });
 });
+
+// Use environment variables for iptables configuration
+const wlanInterface = process.env.WLAN_INTERFACE;
+const redirectTargetIp = process.env.REDIRECT_TARGET_IP;
+const redirectTargetPort = process.env.REDIRECT_TARGET_PORT;
+
 // Helper function to check if a rule exists in iptables
 function ruleExists(ruleCheckCommand) {
   return new Promise((resolve, reject) => {
@@ -258,6 +293,7 @@ async function allowInternetAccess(clientIp) {
 
   // Check if the rule exists before adding it
   try {
+    // Use configured interface, IP, and port
     const httpRuleCheck = `sudo iptables -t nat -L PREROUTING -v -n --line-numbers | grep '${clientIp}' | grep 'DNAT'`;
     const httpsRuleCheck = `sudo iptables -L FORWARD -v -n --line-numbers | grep '${clientIp}' | grep 'REJECT'`;
 
@@ -265,7 +301,8 @@ async function allowInternetAccess(clientIp) {
 
     // Add the rule if it doesn't exist
     if (!httpExists) {
-      exec(`sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination 192.168.1.1:8080`, (error, stdout, stderr) => {
+      // Use configured interface, IP, and port
+      exec(`sudo iptables -t nat -A PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
         if (error) {
           console.error(`Error executing allowInternetAccess (HTTP): ${error.message}`);
           return;
@@ -279,7 +316,8 @@ async function allowInternetAccess(clientIp) {
     }
 
     if (!httpsExists) {
-      exec(`sudo iptables -A FORWARD -i wlan0 -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
+      // Use configured interface
+      exec(`sudo iptables -A FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
         if (error) {
           console.error(`Error executing allowInternetAccess (HTTPS): ${error.message}`);
           return;
@@ -303,6 +341,7 @@ async function revokeInternetAccess(clientIp) {
 
   // Check if the rule exists before deleting it
   try {
+    // Use configured interface, IP, and port
     const httpRuleCheck = `sudo iptables -t nat -L PREROUTING -v -n --line-numbers | grep '${clientIp}' | grep 'DNAT'`;
     const httpsRuleCheck = `sudo iptables -L FORWARD -v -n --line-numbers | grep '${clientIp}' | grep 'REJECT'`;
 
@@ -310,7 +349,8 @@ async function revokeInternetAccess(clientIp) {
 
     // Remove the rule if it exists
     if (httpExists) {
-      exec(`sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination 192.168.1.1:8080`, (error, stdout, stderr) => {
+      // Use configured interface, IP, and port
+      exec(`sudo iptables -t nat -D PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
         if (error) {
           console.error(`Error executing revokeInternetAccess (HTTP): ${error.message}`);
           return;
@@ -324,7 +364,8 @@ async function revokeInternetAccess(clientIp) {
     }
 
     if (httpsExists) {
-      exec(`sudo iptables -D FORWARD -i wlan0 -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
+      // Use configured interface
+      exec(`sudo iptables -D FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
         if (error) {
           console.error(`Error executing revokeInternetAccess (HTTPS): ${error.message}`);
           return;

@@ -9,8 +9,17 @@ const fs = require('fs');        // Import fs module to read certificates
 const app = express();
 const axios = require('axios');
 
-// Use environment variable for port, default to 3000 if not set
-const PORT = process.env.PORT || 3000;
+// Environment variable checks
+const requiredEnvVars = ['PORT', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'HTTPS_KEY_PATH', 'HTTPS_CERT_PATH'];
+for (const varName of requiredEnvVars) {
+  if (!process.env[varName]) {
+    console.error(`Error: Environment variable ${varName} is not set. Please define it in the .env file.`);
+    process.exit(1);
+  }
+}
+
+// Use environment variable for port
+const PORT = process.env.PORT;
 console.log(`Using port: ${PORT}`);
 
 // Enable CORS for all origins
@@ -94,7 +103,7 @@ app.post('/login_api', async (req, res) => {
       return res.status(401).json({ detail: 'Invalid username or password' });
     }
 
-    
+
     // Prepare session data to send to the /activate-session route
     const activateSessionData = {
       mac_address: cookieInfo.mac,
@@ -195,12 +204,20 @@ app.get('/hello_api', (req, res) => {
   res.json({ message: 'Authentication API up and running...' });
 });
 
-// Read the SSL certificates
-const privateKey = fs.readFileSync('/etc/letsencrypt/live/[YOUR_DOMAIN]/privkey.pem', 'utf8');
-const certificate = fs.readFileSync('/etc/letsencrypt/live/[YOUR_DOMAIN]/fullchain.pem', 'utf8');
-const credentials = { key: privateKey, cert: certificate };
+// Read the SSL certificates using paths from environment variables
+const privateKeyPath = process.env.HTTPS_KEY_PATH;
+const certificatePath = process.env.HTTPS_CERT_PATH;
 
-// Start the HTTPS server
-https.createServer(credentials, app).listen(PORT, () => {
-  console.log(`Server running on https://localhost:${PORT}`);
-});
+try {
+  const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+  const certificate = fs.readFileSync(certificatePath, 'utf8');
+  const credentials = { key: privateKey, cert: certificate };
+
+  // Start the HTTPS server
+  https.createServer(credentials, app).listen(PORT, () => {
+    console.log(`Server running on https://localhost:${PORT}`);
+  });
+} catch (err) {
+  console.error(`Error reading certificate files or starting HTTPS server: ${err.message}`);
+  process.exit(1); // Exit if HTTPS setup fails
+}

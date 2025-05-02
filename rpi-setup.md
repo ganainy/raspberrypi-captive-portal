@@ -210,13 +210,13 @@ Copy the contents of `~/.ssh/id_ed25519.pub` to the `~/.ssh/authorized_keys` fil
 
 1. **Create the service file:**
 ```bash
-sudo nano /etc/systemd/system/ssh-tunnel.service
+sudo nano /etc/systemd/system/captiveportal-ssh-tunnel.service
 ```
 
 2. **Add the following configuration:**
 ```ini
 [Unit]
-Description=SSH Tunnel Service
+Description=Captive Portal SSH Tunnel Service
 After=network.target
 
 [Service]
@@ -231,22 +231,22 @@ WantedBy=multi-user.target
 
 3. **Enable and start the service:**
 ```bash
-sudo systemctl enable ssh-tunnel
-sudo systemctl start ssh-tunnel
+sudo systemctl enable captiveportal-ssh-tunnel.service
+sudo systemctl start captiveportal-ssh-tunnel.service
 ```
 
 ### Monitor the tunnel:
 ```bash
 # Check service status
-sudo systemctl status ssh-tunnel
+sudo systemctl status captiveportal-ssh-tunnel.service
 
 # View logs
-journalctl -fu ssh-tunnel
+journalctl -fu captiveportal-ssh-tunnel.service
 ```
 ---
 ## Step 8: Node.js Services
 
-### Node Listener Service
+### Node Listener Service (captiveportal-listener)
 
 #### Responsibilities
 1. Listens on port `4001` for requests from the remote server (port `4000`) through a reverse SSH tunnel.
@@ -255,50 +255,57 @@ journalctl -fu ssh-tunnel
 4. Periodically disconnects users after 1 hour of internet access.
 
 #### Steps to Set Up
-1. **Copy Code to a file**
- - Create a file and paste the contents of [`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js) into it.
+1. **Create Directory and Copy Code**
+    ```bash
+    sudo mkdir -p /opt/captive-portal-listener-node
+    sudo nano /opt/captive-portal-listener-node/listener.js
+    ```
+    *Paste the contents of [`local-auth-server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local-auth-server/listener.js) into the editor and save.*
 
-
-  ```bash
-   sudo nano /opt/captive-portal-listener-node/listener.js
-   ```
 2. **Install Dependencies**
-   ```bash
-   cd /opt/captive-portal-listener-node
-   npm install
-   ```
-3. **Create a Systemd Service**
-   ```bash
-   sudo nano /etc/systemd/system/node-listener.service
-   ```
-   **Service Configuration:**
-   ```ini
-   [Unit]
-   Description=Node.js Listener Service
-   After=network.target
+    ```bash
+    cd /opt/captive-portal-listener-node
+    sudo npm install express sqlite3 body-parser child_process dotenv # Ensure all dependencies are listed
+    ```
+3. **Create `.env` file**
+    ```bash
+    sudo nano /opt/captive-portal-listener-node/.env
+    ```
+    *Add the required environment variables based on the `.env.example` file in the `local-auth-server` directory.*
 
-   [Service]
-   ExecStart=/usr/bin/node /opt/captive-portal-listener-node/listener.js
-   WorkingDirectory=/opt/captive-portal-listener-node
-   Restart=always
-   User=root
-   Group=root
-   Environment=NODE_ENV=production
-   Environment=PORT=4001
-   StandardOutput=syslog
-   StandardError=syslog
-   SyslogIdentifier=node-listener
+4. **Create a Systemd Service**
+    ```bash
+    sudo nano /etc/systemd/system/captiveportal-listener.service
+    ```
+    **Service Configuration:**
+    ```ini
+    [Unit]
+    Description=Captive Portal Node.js Listener Service
+    After=network.target captiveportal-ssh-tunnel.service # Ensure tunnel is attempted first
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
-4. **Start and Enable the Service**
-   ```bash
-   sudo systemctl enable node-listener.service
-   sudo systemctl start node-listener.service
-   ```
+    [Service]
+    ExecStart=/usr/bin/node /opt/captive-portal-listener-node/listener.js
+    WorkingDirectory=/opt/captive-portal-listener-node
+    Restart=always
+    User=root # Consider running as a less privileged user if possible
+    Group=root
+    Environment=NODE_ENV=production
+    # Environment variables can also be loaded from a file:
+    # EnvironmentFile=/opt/captive-portal-listener-node/.env
+    StandardOutput=syslog
+    StandardError=syslog
+    SyslogIdentifier=captiveportal-listener
 
-### Captive Portal Proxy Service
+    [Install]
+    WantedBy=multi-user.target
+    ```
+5. **Start and Enable the Service**
+    ```bash
+    sudo systemctl enable captiveportal-listener.service
+    sudo systemctl start captiveportal-listener.service
+    ```
+
+### Captive Portal Proxy Service (captiveportal-proxy)
 
 #### Description
 A Node.js service that creates a proxy server to intercept HTTP requests and redirect users to a captive portal. The service captures client information (IP, MAC address, user agent) and sends it to the remote server.
@@ -308,57 +315,63 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 - Automatic client redirection to captive portal
 - Client information tracking (IP, MAC, User Agent)
 
-
 #### Installation & Setup
 
-1. **Copy Code to a file**
-   - Create a file and paste the contents of [`http-redirect-proxy-node/captive-http-redirect-proxy.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/http-redirect-proxy-node/captive-http-redirect-proxy.js) into it.
-
-   ```bash
-   sudo nano /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
-   ```
+1. **Create Directory and Copy Code**
+    ```bash
+    sudo mkdir -p /opt/http-redirect-proxy-node
+    sudo nano /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
+    ```
+    *Paste the contents of [`http-redirect-proxy-node/captive-http-redirect-proxy.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/http-redirect-proxy-node/captive-http-redirect-proxy.js) into the editor and save.*
 
 2. **Install Dependencies**
-   ```bash
-   npm install
-   ```
+    ```bash
+    cd /opt/http-redirect-proxy-node
+    sudo npm install http-proxy http child_process dotenv # Ensure all dependencies are listed
+    ```
+3. **Create `.env` file**
+    ```bash
+    sudo nano /opt/http-redirect-proxy-node/.env
+    ```
+    *Add the required environment variables based on the `.env.example` file in the `http-redirect-proxy-node` directory. Remember to update `CAPTIVE_BACKEND_TARGET`.*
 
-3. **Create Systemd Service**
-   ```bash
-   sudo nano /etc/systemd/system/captive-portal.service
-   ```
+4. **Create Systemd Service**
+    ```bash
+    sudo nano /etc/systemd/system/captiveportal-proxy.service
+    ```
 
-   Add the following configuration:
-   ```ini
-   [Unit]
-   Description=Captive Portal Proxy Service
-   After=network.target
+    Add the following configuration:
+    ```ini
+    [Unit]
+    Description=Captive Portal Proxy Service
+    After=network.target
 
-   [Service]
-   ExecStart=/usr/bin/node /path/to/your/proxy-server.js
-   WorkingDirectory=/path/to/your/directory
-   Restart=always
-   User=root
-   Group=root
-   Environment=NODE_ENV=production
-   StandardOutput=syslog
-   StandardError=syslog
-   SyslogIdentifier=captive-portal
+    [Service]
+    ExecStart=/usr/bin/node /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
+    WorkingDirectory=/opt/http-redirect-proxy-node
+    Restart=always
+    User=root # Consider running as a less privileged user if possible
+    Group=root
+    Environment=NODE_ENV=production
+    # EnvironmentFile=/opt/http-redirect-proxy-node/.env
+    StandardOutput=syslog
+    StandardError=syslog
+    SyslogIdentifier=captiveportal-proxy
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
+    [Install]
+    WantedBy=multi-user.target
+    ```
 
-4. **Enable and Start the Service**
-   ```bash
-   sudo systemctl enable captive-portal
-   sudo systemctl start captive-portal
-   ```
+5. **Enable and Start the Service**
+    ```bash
+    sudo systemctl enable captiveportal-proxy.service
+    sudo systemctl start captiveportal-proxy.service
+    ```
 
-5. **Check Service Status**
-   ```bash
-   sudo systemctl status captive-portal
-   ```
+6. **Check Service Status**
+    ```bash
+    sudo systemctl status captiveportal-proxy.service
+    ```
 
 #### Configuration
 - Default port: 8080

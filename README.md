@@ -10,6 +10,7 @@ This branch implements a captive portal on the Raspberry Pi that redirects users
 - **Remote User Login & Authentication**: Users authenticate via a remote web server.
 - **SSH Reverse Tunnel**: Secure communication between the remote server and the Raspberry Pi.
 - **Automatic Session Management**: Handles session durations and renewals for users.
+- **Configuration via `.env` files**: Easily manage settings for different components.
 
 ## Prerequisites
 - Raspberry Pi with Wi-Fi capability

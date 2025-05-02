@@ -2,17 +2,38 @@
 This Node.js HTTP proxy listens for HTTP traffic on port 8080, which is redirected from the Raspberry Pi's port 80. The redirection is accomplished using iptables. 
 It then adds some query parameters to the request and forwards it to the captive portal server. If the request is already for the captive portal,
  it forwards it directly. If the request is for any other domain, it redirects it to the captive portal."
-*/ 
+*/
+
+require('dotenv').config(); // Load environment variables from .env file
 
 const httpProxy = require("http-proxy");
 const http = require("http");
 const { exec } = require("child_process");
 
+// Environment variable checks
+const requiredEnvVarsProxy = [
+  'CAPTIVE_BACKEND_TARGET', // Renamed from CAPTIVE_PORTAL_TARGET_URL for clarity
+  'CAPTIVE_DOMAIN',
+  'PROXY_LISTEN_IP',
+  'PROXY_LISTEN_PORT',
+  'WLAN_INTERFACE' // Added for MAC lookup
+];
+for (const varName of requiredEnvVarsProxy) {
+  if (!process.env[varName]) {
+    console.error(`Error: Environment variable ${varName} is not set. Please define it in the .env file.`);
+    process.exit(1);
+  }
+}
+
 // Create a proxy server
 const proxy = httpProxy.createProxyServer({});
 
-// Define the target server for the captive portal
-const captivePortalTarget = "http://13.61.79.152";
+// Define the target server for the captive portal from environment variable
+const captiveBackendTarget = process.env.CAPTIVE_BACKEND_TARGET;
+// Define the captive domain from environment variable
+const captiveDomain = process.env.CAPTIVE_DOMAIN;
+// Define the WLAN interface from environment variable
+const wlanInterface = process.env.WLAN_INTERFACE;
 
 // Start an HTTP server
 const server = http.createServer(async (req, res) => {
@@ -24,10 +45,11 @@ const server = http.createServer(async (req, res) => {
     const referer = req.headers.referer || ""; // Capture the HTTP referer (if available)
     const httpMethod = req.method; // Capture the HTTP method (GET, POST, etc.)
 
-    let clientMac = await getClientMac(clientIp); // Retrieve the MAC address
+    let clientMac = await getClientMac(clientIp, wlanInterface); // Pass wlanInterface to getClientMac
     if (!clientMac) clientMac = "unknown"; // Fallback if MAC address is unavailable
 
-    if (hostHeader === "captive.ganainy.online") {
+    // Use configured captive domain for check
+    if (hostHeader === captiveDomain) {
       // Build query parameters for captive portal target
       const params = new URLSearchParams();
       params.set("ip", clientIp);
@@ -37,12 +59,15 @@ const server = http.createServer(async (req, res) => {
       params.set("http_method", httpMethod);
       params.set("referer", encodeURIComponent(referer));
 
-      // Proxy the request to the captive portal
-      console.log(`Forwarding to captive portal: ${captivePortalTarget}?${params.toString()}`);
-      proxy.web(req, res, { target: `${captivePortalTarget}?${params.toString()}` });
+      // Proxy the request to the configured captive backend target
+      console.log(`Forwarding to captive portal backend: ${captiveBackendTarget}?${params.toString()}`);
+      // Construct target URL correctly
+      const targetUrl = new URL(captiveBackendTarget);
+      targetUrl.search = params.toString(); // Append params correctly
+      proxy.web(req, res, { target: targetUrl.toString(), changeOrigin: true }); // Added changeOrigin for robustness
     } else {
-      // Redirect to captive.ganainy.online
-      console.log(`Redirecting: ${hostHeader} -> captive.ganainy.online`);
+      // Redirect to the configured captive domain
+      console.log(`Redirecting: ${hostHeader} -> ${captiveDomain}`);
       const params = new URLSearchParams();
       params.set("ip", clientIp);
       params.set("mac", clientMac);
@@ -51,7 +76,7 @@ const server = http.createServer(async (req, res) => {
       params.set("http_method", httpMethod);
       params.set("referer", encodeURIComponent(referer));
 
-      res.writeHead(302, { Location: `http://captive.ganainy.online?${params.toString()}` });
+      res.writeHead(302, { Location: `http://${captiveDomain}?${params.toString()}` });
       res.end();
     }
   } catch (err) {
@@ -90,7 +115,7 @@ function getUserAgent(req) {
 /**
  * Get the MAC address for a given IP.
  */
-function getClientMac(ipAddress) {
+function getClientMac(ipAddress, interfaceName) { // Accept interface name as argument
   return new Promise((resolve, reject) => {
     if (!ipAddress) {
       return resolve(null);
@@ -98,7 +123,8 @@ function getClientMac(ipAddress) {
 
     const normalizedIp = ipAddress.replace(/^::ffff:/, "");
 
-    exec(`ip neigh show dev wlan0 | grep "${normalizedIp}"`, (error, stdout) => {
+    // Use the provided interface name in the command
+    exec(`ip neigh show dev ${interfaceName} | grep "${normalizedIp}"`, (error, stdout) => {
       if (error) {
         console.error(`Error retrieving MAC address: ${error.message}`);
         return resolve(null);
@@ -115,6 +141,16 @@ function getClientMac(ipAddress) {
   });
 }
 
-server.listen(8080, "192.168.1.1", () => {
-  console.log("Proxy server is running on http://192.168.1.1:8080");
+// Use environment variables for listening IP and Port
+const listenIp = process.env.PROXY_LISTEN_IP;
+const listenPort = parseInt(process.env.PROXY_LISTEN_PORT, 10);
+
+// Validate parsed port
+if (isNaN(listenPort)) {
+  console.error('Error: PROXY_LISTEN_PORT must be a valid number.');
+  process.exit(1);
+}
+
+server.listen(listenPort, listenIp, () => {
+  console.log(`Proxy server is running on http://${listenIp}:${listenPort}`);
 });

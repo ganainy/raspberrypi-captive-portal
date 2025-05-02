@@ -2,3 +2,17 @@ storage-endpoint/storage.conf
 remote-auth-server/auth.conf
 remote-website/captive.conf
 for-me/
+
+# Environment files
+.env
+remote-auth-server/.env
+local-auth-server/.env
+http-redirect-proxy-node/.env
+
+# Node modules
+node_modules/
+npm-debug.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
