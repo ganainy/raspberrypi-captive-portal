@@ -172,6 +172,11 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ---
 ## Step 6: Blocking (HTTPS) and Redirecting (HTTP) Traffic
 
+### Allow Access to Remote Auth Server
+# Before applying general blocking rules, allow HTTPS traffic to the remote authentication server.
+# Replace <AUTH_SERVER_IP> with your actual remote server's IP address.
+sudo iptables -I FORWARD -i wlan0 -d <AUTH_SERVER_IP> -p tcp --dport 443 -j ACCEPT
+
 ### Blocking and redirecting:
 #### We will run a script [`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/iptables-blocking/iptables_blocking_rules.sh) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
 ```bash
@@ -204,7 +209,7 @@ ssh-keygen -t ed25519 -C "your_email@example.com"
 ```
 
 ### Add the public key to the remote server:
-Copy the contents of `~/.ssh/id_ed25519.pub` to the `~/.ssh/authorized_keys` file on the remote server.
+Copy the contents of `~/.ssh/id_ed25519.pub` to the `~/.ssh/authorized_keys` file on the remote server (use root remote server user).
 
 ### Set up persistent tunnel using systemd:
 
@@ -275,34 +280,40 @@ journalctl -fu captiveportal-ssh-tunnel.service
 
 4. **Create a Systemd Service**
     ```bash
-    sudo nano /etc/systemd/system/captiveportal-listener.service
-    ```
-    **Service Configuration:**
-    ```ini
-    [Unit]
-    Description=Captive Portal Node.js Listener Service
-    After=network.target captiveportal-ssh-tunnel.service # Ensure tunnel is attempted first
+   [Unit]
+   Description=Captive Portal Node.js Listener Service
+   # Ensure the SSH tunnel service is started before this one
+   After=network.target captiveportal-ssh-tunnel.service
 
-    [Service]
-    ExecStart=/usr/bin/node /opt/captive-portal-listener-node/listener.js
-    WorkingDirectory=/opt/captive-portal-listener-node
-    Restart=always
-    User=root # Consider running as a less privileged user if possible
-    Group=root
-    Environment=NODE_ENV=production
-    # Environment variables can also be loaded from a file:
-    # EnvironmentFile=/opt/captive-portal-listener-node/.env
-    StandardOutput=syslog
-    StandardError=syslog
-    SyslogIdentifier=captiveportal-listener
+   [Service]
+   # Use the full path to your Node.js executable
+   ExecStart=/usr/bin/node /opt/captive-portal-listener-node/listener
+   WorkingDirectory=/opt/captive-portal-listener-node
+   Restart=always
+   # Running as root is often necessary for iptables commands,
+   # but consider a less privileged user with specific sudo permissions if possible.
+   User=root
+   Group=root
+   # Load environment variables from your .env file
+   EnvironmentFile=/opt/captive-portal-listener-node/.env
+   Environment=NODE_ENV=production # Keep your existing environment variable
+   # Use journal for logging (recommended)
+   StandardOutput=journal
+   StandardError=journal
+   SyslogIdentifier=captiveportal-listener
 
-    [Install]
-    WantedBy=multi-user.target
+   [Install]
+   WantedBy=multi-user.target
     ```
 5. **Start and Enable the Service**
     ```bash
     sudo systemctl enable captiveportal-listener.service
     sudo systemctl start captiveportal-listener.service
+    ```
+6. **Check Service Status**
+    ```bash
+    sudo systemctl status captiveportal-listener.service
+    sudo journalctl -fu captiveportal-listener.service
     ```
 
 ### Captive Portal Proxy Service (captiveportal-proxy)
@@ -342,24 +353,30 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 
     Add the following configuration:
     ```ini
-    [Unit]
-    Description=Captive Portal Proxy Service
-    After=network.target
+   [Unit]
+   Description=Captive Portal Proxy Service
+   # Ensure network is up before starting
+   After=network.target
 
-    [Service]
-    ExecStart=/usr/bin/node /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
-    WorkingDirectory=/opt/http-redirect-proxy-node
-    Restart=always
-    User=root # Consider running as a less privileged user if possible
-    Group=root
-    Environment=NODE_ENV=production
-    # EnvironmentFile=/opt/http-redirect-proxy-node/.env
-    StandardOutput=syslog
-    StandardError=syslog
-    SyslogIdentifier=captiveportal-proxy
+   [Service]
+   # Use the full path to your Node.js executable
+   ExecStart=/usr/bin/node /opt/http-redirect-proxy-node/captive-http-redirect-proxy.js
+   WorkingDirectory=/opt/http-redirect-proxy-node
+   Restart=always
+   # Running as root is often necessary for proxy services listening on low ports (like 80),
+   # but consider capability management or iptables redirection for less privileged users if possible.
+   User=root
+   Group=root
+   # Load environment variables from your .env file
+   EnvironmentFile=/opt/http-redirect-proxy-node/.env
+   Environment=NODE_ENV=production # Keep your existing environment variable
+   # Use journal for logging (recommended)
+   StandardOutput=journal
+   StandardError=journal
+   SyslogIdentifier=captiveportal-proxy
 
-    [Install]
-    WantedBy=multi-user.target
+   [Install]
+   WantedBy=multi-user.target
     ```
 
 5. **Enable and Start the Service**
@@ -371,12 +388,19 @@ A Node.js service that creates a proxy server to intercept HTTP requests and red
 6. **Check Service Status**
     ```bash
     sudo systemctl status captiveportal-proxy.service
+    sudo journalctl -fu captiveportal-proxy.service
     ```
 
-#### Configuration
-- Default port: 8080
-- Default IP: 192.168.1.1
-- Captive portal target: http://[YOUR_CAPTIVE_SUBDOMAIN]
+#### Congratulations
+Now if you run the following command you should see the three services up and running
+  ```bash
+  systemctl list-units --type=service | grep captiveportal
+  ```
+
+To view the logs for your three captive portal services at once:
+```bash
+  sudo journalctl -fu captiveportal-listener.service captiveportal-proxy.service captiveportal-ssh-tunnel.service
+  ```
 
 ---
 ### Step 9:(Optional: helpful SQLite Commands to see the Sessions database) 

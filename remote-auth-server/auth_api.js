@@ -66,8 +66,9 @@ app.post('/login_api', async (req, res) => {
 
   // Validate that cookieInfo and necessary fields are present
   if (!cookieInfo || !cookieInfo.ip) {
-    console.error(' Auth error: cookie has no IP');
-    return res.status(400).json({ detail: 'Auth error: cookie has no IP' });
+    console.error('Auth error: cookie has no IP. Redirecting to login error page.');
+    // Redirect to the login error page if cookieInfo or IP is missing
+    return res.redirect('/login-error');
   }
 
   // Check each field and log if it's missing
@@ -144,12 +145,19 @@ app.post('/signup_api', async (req, res) => {
   const { username, password, cookieInfo } = req.body;
 
   // Fallback for missing cookie values
+  if (!cookieInfo) {
+    console.error('Auth error: cookieInfo is missing. Redirecting to signup error page.');
+    // Redirect to the signup error page if cookieInfo is missing entirely
+    return res.redirect('/signup-error');
+  }
+
   if (!cookieInfo.mac) {
     cookieInfo.mac = 'unknown';
   }
   if (!cookieInfo.ip) {
-    console.error('Auth error: cookie has no IP');
-    return res.status(400).json({ detail: 'Auth error: cookie has no IP' });
+    console.error('Auth error: cookie has no IP. Redirecting to signup error page.');
+    // Redirect to the signup error page instead of sending JSON
+    return res.redirect('/signup-error');
   }
 
   try {
