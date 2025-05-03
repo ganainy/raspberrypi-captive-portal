@@ -6,9 +6,6 @@
  * This server listens for incoming HTTP requests from the remote server, 
  * activates or updates a session in the local SQLite database, and 
  * allows internet access for the device associated with the session.
- * 
- * It also periodically checks for inactive sessions and revokes internet access 
- * for those sessions after one hour.
  */
 
 require('dotenv').config(); // Load environment variables from .env file
@@ -237,27 +234,25 @@ const deactivateSession = (userId, ip) => {
   });
 };
 
+// Route for manual session deactivation
+app.post('/deactivate-session', validateSessionFields, async (req, res) => {
+  const { user_id, ip } = req.body;
 
-setInterval(() => {
-  console.log("Checking for inactive sessions...");
-  const currentTime = new Date().toISOString(); // Get the current system time
+  try {
+    console.log("Manually deactivating session...");
+    deactivateSession(user_id, ip);
 
-  db.all(`
-    SELECT user_id, ip, logout_timestamp 
-    FROM sessions 
-    WHERE status = 'active' AND logout_timestamp < ?
-  `, [currentTime], (err, sessions) => {
-    if (err) {
-      console.error('Error fetching sessions:', err);
-      return;
-    }
-
-    sessions.forEach(session => {
-      deactivateSession(session.user_id, session.ip);
+    res.status(200).json({
+      message: 'Session deactivated successfully'
     });
-  });
-}, checkIntervalMs); // Use configured interval
-
+  } catch (err) {
+    console.error('Error during session deactivation:', err);
+    res.status(500).json({
+      error: 'Failed to deactivate session',
+      details: err.message,
+    });
+  }
+});
 
 // Endpoint for testing the connection between RPi and remote server
 app.get('/test', (req, res) => {
@@ -291,47 +286,43 @@ function ruleExists(ruleCheckCommand) {
 async function allowInternetAccess(clientIp) {
   console.log(`Allowing internet access for IP: ${clientIp}`);
 
-  // Check if the rule exists before adding it
   try {
-    // Use configured interface, IP, and port
-    const httpRuleCheck = `sudo iptables -t nat -L PREROUTING -v -n --line-numbers | grep '${clientIp}' | grep 'DNAT'`;
-    const httpsRuleCheck = `sudo iptables -L FORWARD -v -n --line-numbers | grep '${clientIp}' | grep 'REJECT'`;
+    // First, remove any existing blocking rules
+    console.log('Step 1: Removing any existing blocking rules...');
 
-    const [httpExists, httpsExists] = await Promise.all([ruleExists(httpRuleCheck), ruleExists(httpsRuleCheck)]);
+    // Remove HTTP redirection rule if it exists
+    exec(`sudo iptables -t nat -D PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
+      if (error && !error.message.includes('No chain/target/match by that name')) {
+        console.log(`[HTTP Rule Remove] Error: ${error.message}`);
+      } else {
+        console.log('[HTTP Rule Remove] Successfully removed if existed');
+      }
+    });
 
-    // Add the rule if it doesn't exist
-    if (!httpExists) {
-      // Use configured interface, IP, and port
-      exec(`sudo iptables -t nat -A PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Error executing allowInternetAccess (HTTP): ${error.message}`);
-          return;
-        }
-        if (stderr) {
-          console.error(`stderr: ${stderr}`);
-          return;
-        }
-        console.log(`stdout: ${stdout}`);
-      });
-    }
+    // Remove HTTPS blocking rule if it exists
+    exec(`sudo iptables -D FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
+      if (error && !error.message.includes('No chain/target/match by that name')) {
+        console.log(`[HTTPS Rule Remove] Error: ${error.message}`);
+      } else {
+        console.log('[HTTPS Rule Remove] Successfully removed if existed');
+      }
+    });
 
-    if (!httpsExists) {
-      // Use configured interface
-      exec(`sudo iptables -A FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Error executing allowInternetAccess (HTTPS): ${error.message}`);
-          return;
-        }
-        if (stderr) {
-          console.error(`stderr: ${stderr}`);
-          return;
-        }
-        console.log(`stdout: ${stdout}`);
-      });
-    }
+    // Add specialized logging to verify rules are being executed correctly
+    console.log('Step 2: Checking current iptables rules...');
+    exec('sudo iptables -L FORWARD -v -n --line-numbers', (error, stdout, stderr) => {
+      if (!error) {
+        console.log('[Debug] Current FORWARD chain rules:\n', stdout);
+      }
+    });
+    exec('sudo iptables -t nat -L PREROUTING -v -n --line-numbers', (error, stdout, stderr) => {
+      if (!error) {
+        console.log('[Debug] Current PREROUTING chain rules:\n', stdout);
+      }
+    });
 
   } catch (err) {
-    console.error(`Error checking or adding rules: ${err}`);
+    console.error(`Error managing iptables rules: ${err}`);
   }
 }
 
@@ -339,47 +330,42 @@ async function allowInternetAccess(clientIp) {
 async function revokeInternetAccess(clientIp) {
   console.log(`Revoking internet access for IP: ${clientIp}`);
 
-  // Check if the rule exists before deleting it
   try {
-    // Use configured interface, IP, and port
-    const httpRuleCheck = `sudo iptables -t nat -L PREROUTING -v -n --line-numbers | grep '${clientIp}' | grep 'DNAT'`;
-    const httpsRuleCheck = `sudo iptables -L FORWARD -v -n --line-numbers | grep '${clientIp}' | grep 'REJECT'`;
+    console.log('Step 1: Adding blocking rules...');
 
-    const [httpExists, httpsExists] = await Promise.all([ruleExists(httpRuleCheck), ruleExists(httpsRuleCheck)]);
+    // Add HTTP redirection rule
+    exec(`sudo iptables -t nat -A PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`[HTTP Rule Add] Error: ${error.message}`);
+      } else {
+        console.log('[HTTP Rule Add] Successfully added');
+      }
+    });
 
-    // Remove the rule if it exists
-    if (httpExists) {
-      // Use configured interface, IP, and port
-      exec(`sudo iptables -t nat -D PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Error executing revokeInternetAccess (HTTP): ${error.message}`);
-          return;
-        }
-        if (stderr) {
-          console.error(`stderr: ${stderr}`);
-          return;
-        }
-        console.log(`stdout: ${stdout}`);
-      });
-    }
+    // Add HTTPS blocking rule
+    exec(`sudo iptables -A FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`[HTTPS Rule Add] Error: ${error.message}`);
+      } else {
+        console.log('[HTTPS Rule Add] Successfully added');
+      }
+    });
 
-    if (httpsExists) {
-      // Use configured interface
-      exec(`sudo iptables -D FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Error executing revokeInternetAccess (HTTPS): ${error.message}`);
-          return;
-        }
-        if (stderr) {
-          console.error(`stderr: ${stderr}`);
-          return;
-        }
-        console.log(`stdout: ${stdout}`);
-      });
-    }
+    // Add specialized logging to verify rules are being executed correctly
+    console.log('Step 2: Verifying rules were added...');
+    exec('sudo iptables -L FORWARD -v -n --line-numbers', (error, stdout, stderr) => {
+      if (!error) {
+        console.log('[Debug] Current FORWARD chain rules:\n', stdout);
+      }
+    });
+    exec('sudo iptables -t nat -L PREROUTING -v -n --line-numbers', (error, stdout, stderr) => {
+      if (!error) {
+        console.log('[Debug] Current PREROUTING chain rules:\n', stdout);
+      }
+    });
 
   } catch (err) {
-    console.error(`Error checking or removing rules: ${err}`);
+    console.error(`Error managing iptables rules: ${err}`);
   }
 }
 

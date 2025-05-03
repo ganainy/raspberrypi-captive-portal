@@ -120,6 +120,10 @@
 <body>
     <div class="signup-container">
         <h2>Sign Up</h2>
+        <div
+            style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+            ⚠️ This is a test captive portal. Please DO NOT use real usernames or passwords.
+        </div>
         <form id="signupForm">
             <div class="form-group">
                 <label for="username">Username</label>
@@ -189,7 +193,7 @@
         console.log(`Attempting to sign up with username: ${username}`);
 
         try {
-            const response = await fetch('/api/signup_api', { // Updated API URL to relative path
+            const response = await fetch('/api/signup_api', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -201,13 +205,38 @@
                 })
             });
 
+            // Check if response is a redirect
+            if (response.redirected) {
+                console.log('Received redirect response, following redirect...');
+                window.location.href = response.url;
+                return;
+            }
+
             if (response.ok) {
                 console.log('Sign-up successful, redirecting to login page...');
-                window.location.href = '/login.html'; // Redirect to login page after successful sign-up
+                window.location.href = '/login.html';
             } else {
-                const errorText = await response.text();
-                console.log('Sign-up failed:', errorText);
-                document.getElementById('error').textContent = `Sign-up failed: ${errorText}`;
+                // Check content type before parsing
+                const contentType = response.headers.get("content-type");
+                let errorText = 'Sign-up failed: Unknown error'; // Default error
+
+                if (contentType && contentType.includes("application/json")) {
+                    try {
+                        const errorData = await response.json();
+                        errorText = `Sign-up failed: ${errorData.detail || 'Unknown error'}`;
+                    } catch (jsonError) {
+                        console.error('Error parsing JSON response:', jsonError);
+                        errorText = 'Sign-up failed: Could not parse error response.';
+                    }
+                } else {
+                    // Handle non-JSON responses
+                    const rawError = await response.text();
+                    console.error('Received non-JSON response:', rawError);
+                    errorText = 'Sign-up failed: Server returned an unexpected response.';
+                }
+
+                console.log(errorText);
+                document.getElementById('error').textContent = errorText;
             }
         } catch (error) {
             console.error('Error during sign-up request:', error);

@@ -207,7 +207,7 @@ sudo nano /opt/captive-portal/server/.env
 ```
 Add the required variables based on `captive-website/server/.env.example`:
 ```env
-PORT=4000 # Or your desired port
+PORT=3000 # Or your desired port
 DB_HOST=localhost
 DB_USER=[YOUR_MYSQL_USER]
 DB_PASSWORD=[YOUR_MYSQL_PASSWORD]
@@ -282,8 +282,8 @@ EXIT;
 Ensure your Apache virtual host for `[YOUR_CAPTIVE_SUBDOMAIN]` correctly proxies requests starting with `/api/` to the Node.js auth server running on the port defined in your `.env` file (default `4000`):
    ```apache
    # ... inside <VirtualHost *:443> for [YOUR_CAPTIVE_SUBDOMAIN] ...
-   ProxyPass /api/ https://127.0.0.1:4000/
-   ProxyPassReverse /api/ https://127.0.0.1:4000/
+   ProxyPass /api/ http://127.0.0.1:3000/
+   ProxyPassReverse /api/ https://127.0.0.1:3000/
    # ... rest of config ...
    ```
    *Restart Apache after changes: `sudo systemctl restart apache2`*
@@ -294,7 +294,7 @@ curl https://[YOUR_CAPTIVE_SUBDOMAIN]/api/hello_api
 ```
 
 Notes:
-- The Auth server API will run on port 4000 by default
+- The Auth server API will run on port 3000 by default
 - Users table will be created automatically
 - API endpoints:
   - POST `/api/login_api`

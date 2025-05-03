@@ -259,7 +259,7 @@ journalctl -fu captiveportal-ssh-tunnel.service
 1. Listens on port `4001` for requests from the remote server (port `4000`) through a reverse SSH tunnel.
 2. Creates/updates user sessions for authenticated users.
 3. Grants or denies internet access based on session state.
-4. Periodically disconnects users after 1 hour of internet access.
+4. Handles manual session deactivation when users choose to end their session.
 
 #### Steps to Set Up
 1. **Create Directory and Copy Code**

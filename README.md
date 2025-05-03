@@ -1,7 +1,7 @@
 # Raspberry Pi Captive Portal (Remote Login)
 
 ## Overview
-This branch implements a captive portal on the Raspberry Pi that redirects users to a remote authentication server. Upon successful login, the user is granted internet access for one hour. This setup is more suitable for large businesses with centralized user data, where user management and authentication are handled remotely.
+This branch implements a captive portal on the Raspberry Pi that redirects users to a remote authentication server. Users can manually end their session when they're done using the internet. This setup is more suitable for large businesses with centralized user data, where user management and authentication are handled remotely.
 
 > **Note:** For local authentication without relying on a Hosting service (everything will be handled directly on the Raspberry Pi, making it more suitable for small businesses), check out the [`local-login`](../local-login/README.md) branch.
 
