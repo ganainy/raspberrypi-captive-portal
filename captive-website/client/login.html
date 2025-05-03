@@ -22,90 +22,112 @@
             overflow: hidden;
         }
 
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+        }
 
+        .warning-box {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #ffeeba;
+            font-size: 0.9rem;
+        }
 
-        /* Input fields styling */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+
         input[type="text"],
         input[type="password"] {
             width: 100%;
             padding: 0.75rem;
-            margin-bottom: 1rem;
+            border: 1px solid #ddd;
             border-radius: 4px;
-            border: 1px solid #ccc;
             font-size: 1rem;
+            transition: border-color 0.3s;
         }
 
-        /* Button styling */
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
         button {
             width: 100%;
             padding: 0.75rem;
-            margin-top: 1rem;
-            margin-bottom: 1rem;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
             font-size: 1rem;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
 
         button:hover {
             background-color: #0056b3;
         }
 
-        /* Terms and conditions section styling */
         .terms {
-            text-align: left;
-            margin-top: 2rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #666;
+        }
+
+        .links {
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: space-between;
             font-size: 0.875rem;
         }
 
-        .terms a {
+        .links a {
             color: #007bff;
             text-decoration: none;
         }
 
-        .terms a:hover {
+        .links a:hover {
             text-decoration: underline;
         }
 
-        /* Heading styling */
-        h2 {
-            margin-bottom: 2rem;
-            font-size: 1.5rem;
-            color: #333;
-        }
-
-        /* Paragraph styling */
-        p {
-            margin-top: 0rem;
+        .error {
+            color: #dc3545;
             font-size: 0.875rem;
+            margin-top: 0.5rem;
         }
 
-        p a {
-            color: #007bff;
-            text-decoration: none;
-        }
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 1.5rem;
+                margin: 1rem;
+            }
 
-        p a:hover {
-            text-decoration: underline;
-        }
-
-        /* Responsive adjustments for small screens */
-        @media (max-width: 768px) {
             button {
                 font-size: 0.9rem;
-                padding: 0.65rem;
             }
 
-            input[type="text"],
-            input[type="password"] {
-                font-size: 0.9rem;
-                padding: 0.65rem;
-            }
-
-            h2 {
-                font-size: 1.25rem;
+            .links {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
             }
         }
     </style>
@@ -114,8 +136,7 @@
 <body>
     <div class="login-container">
         <h2>Captive Portal Login</h2>
-        <div
-            style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+        <div class="warning-box">
             ⚠️ This is a test captive portal. Please DO NOT use real usernames or passwords.
         </div>
         <form id="loginForm">
@@ -130,15 +151,17 @@
             <div class="terms">
                 <label>
                     <input type="checkbox" id="tos" required>
-                    I agree to the <a href="/terms-of-service.html" target="_blank">Terms of Service</a>.
+                    I agree to the <a href="/terms-of-service.html" target="_blank">Terms of Service</a>
+                    and <a href="/privacy-policy.html" target="_blank">Privacy Policy</a>
                 </label>
             </div>
             <button type="submit">Login</button>
             <div id="error" class="error"></div>
         </form>
-        <p>
+        <div class="links">
             <a href="/signup.html">No account? Sign up here!</a>
-        </p>
+            <a href="/privacy-policy.html">Privacy Policy</a>
+        </div>
     </div>
 </body>
 

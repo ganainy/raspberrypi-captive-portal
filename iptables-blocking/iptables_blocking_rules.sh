@@ -1,28 +1,8 @@
-
-
-#-------------Steps to execute this script on the RPi-------------------
-# This script will add iptables rules for a given range of IP addresses
-# to DNAT traffic on port 80 to another IP address.
-
-# The script will:
-# Block HTTPS traffic
-# Redirect HTTP traffic to port `8080`, where a Node.js proxy will be listening
-# Block IPs in the range `192.168.1.2` to `192.168.1.100`
-
-# 1. Copy the content of this file to a file on the RPi with .sh extension
-#    ->    sudo nano iptables_blocking_rules.sh
-# 2. Make it executable
-#    ->    sudo chmod +x iptables_blocking_rules.sh
-# 3. Run it
-#    ->  sudo ./iptables_blocking_rules.sh
-
-
-
 #!/bin/bash
 
 # Define the IP range and interface
 IP_START=2
-IP_END=100
+IP_END=11
 INTERFACE="wlan0"
 
 # Define the first rule variables

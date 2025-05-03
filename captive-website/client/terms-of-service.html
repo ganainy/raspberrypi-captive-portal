@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,15 +15,21 @@
 
         main {
             background: white;
-            margin: 10vh auto; /* Center vertically with top margin */
+            margin: 10vh auto;
+            /* Center vertically with top margin */
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            width: 90%; /* Default width */
-            max-width: 600px; /* Max width for larger screens */
-            box-sizing: border-box; /* Ensure padding fits inside */
-            overflow-y: auto; /* Scrollable if content exceeds */
-            max-height: 80vh; /* Prevent overflow on smaller screens */
+            width: 90%;
+            /* Default width */
+            max-width: 600px;
+            /* Max width for larger screens */
+            box-sizing: border-box;
+            /* Ensure padding fits inside */
+            overflow-y: auto;
+            /* Scrollable if content exceeds */
+            max-height: 80vh;
+            /* Prevent overflow on smaller screens */
         }
 
         h2 {
@@ -97,17 +104,22 @@
         /* Tablet and Mobile Styling */
         @media (max-width: 768px) {
             main {
-                margin: 5vh auto; /* Adjust margin for smaller screens */
-                padding: 1.5rem; /* Reduce padding */
-                max-width: 95%; /* Use more screen space */
+                margin: 5vh auto;
+                /* Adjust margin for smaller screens */
+                padding: 1.5rem;
+                /* Reduce padding */
+                max-width: 95%;
+                /* Use more screen space */
             }
 
             h2 {
-                font-size: 1.5rem; /* Slightly smaller header */
+                font-size: 1.5rem;
+                /* Slightly smaller header */
             }
 
             .tos-content {
-                font-size: 0.95rem; /* Smaller text */
+                font-size: 0.95rem;
+                /* Smaller text */
             }
         }
 
@@ -115,11 +127,13 @@
         @media (max-width: 480px) {
             main {
                 margin: 5vh auto;
-                padding: 1rem; /* Compact padding */
+                padding: 1rem;
+                /* Compact padding */
             }
 
             h2 {
-                font-size: 1.25rem; /* Smaller header size */
+                font-size: 1.25rem;
+                /* Smaller header size */
             }
 
             .tos-content {
@@ -131,27 +145,75 @@
 
 
 <body>
-    <div class="tos-container">
+    <main>
         <h2>Terms of Service</h2>
         <div class="tos-content">
-            <p>By using this network, you agree to the following terms:</p>
+            <h3>1. Acceptance of Terms</h3>
+            <p>By accessing this network through our captive portal, you agree to these Terms of Service. If you do not
+                agree with any part of these terms, you must not use this network.</p>
+
+            <h3>2. Network Usage</h3>
             <ul>
-                <li>You agree not to misuse the network.</li>
-                <li>You agree to follow all applicable laws and regulations.</li>
-                <li>The network administrators are not responsible for any content you access.</li>
-                <li>Any misuse may result in your access being revoked.</li>
+                <li>You agree to use this network for lawful purposes only</li>
+                <li>You will not attempt to circumvent the captive portal or network security measures</li>
+                <li>You will not use the network to transmit malicious software or conduct unauthorized scanning</li>
+                <li>You will not engage in activities that may degrade network performance for other users</li>
+                <li>Bandwidth usage may be monitored and limited to ensure fair usage</li>
             </ul>
+
+            <h3>3. Data Collection & Privacy</h3>
+            <ul>
+                <li>We collect and store your device's MAC address and IP address for network management</li>
+                <li>Session data including login times and traffic metadata may be logged</li>
+                <li>We do not monitor or store the content of your communications</li>
+                <li>Collected data is used for network security and service improvement only</li>
+            </ul>
+
+            <h3>4. Security</h3>
+            <ul>
+                <li>This is a shared network - use appropriate security measures for sensitive activities</li>
+                <li>We recommend using VPN for sensitive transactions</li>
+                <li>You are responsible for the security of your own devices</li>
+                <li>The network may block certain ports and protocols for security reasons</li>
+            </ul>
+
+            <h3>5. Service Limitations</h3>
+            <ul>
+                <li>Network access is provided "as is" without guarantees of availability or speed</li>
+                <li>We reserve the right to terminate your access at any time</li>
+                <li>Maintenance windows may result in temporary service interruptions</li>
+                <li>Some websites or services may be blocked for network security</li>
+            </ul>
+
+            <h3>6. Disclaimer of Liability</h3>
+            <p>The network administrators and service providers are not liable for:</p>
+            <ul>
+                <li>Loss of data or damage to your devices</li>
+                <li>Any consequences of network downtime or service interruptions</li>
+                <li>Security breaches or data theft when using the network</li>
+                <li>Content accessed through the network</li>
+            </ul>
+
+            <div class="warning-box"
+                style="background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin: 20px 0; border: 1px solid #ffeeba;">
+                ⚠️ This is a test environment. Do not use this network for accessing sensitive information or conducting
+                important transactions.
+            </div>
         </div>
-    </div>
-    <div class="actions">
-        <label>
-            <input type="checkbox" id="confirm-tos" onclick="toggleAcceptButton()"> <strong>I have read and agree to the Terms of Service</strong>
-        </label>
-        <button id="accept-btn" disabled onclick="acceptTos(); window.location.href = '/login.html';">Accept</button>
-    </div>
-    <div class="download-link">
-        <a href="assets/terms-of-service.pdf" download>Download Terms of Service as PDF</a>
-    </div>
+
+        <div class="actions">
+            <label>
+                <input type="checkbox" id="confirm-tos" onclick="toggleAcceptButton()">
+                <strong>I have read and understand these Terms of Service and agree to be bound by them</strong>
+            </label>
+            <button id="accept-btn" disabled onclick="acceptTos(); window.location.href = '/login.html';">Accept &
+                Continue</button>
+        </div>
+
+        <div class="download-link">
+            <a href="assets/terms-of-service.pdf" download>Download Terms of Service as PDF</a>
+        </div>
+    </main>
 </body>
 
 <script>

@@ -34,7 +34,7 @@ server=1.1.1.1
 server=8.8.8.8
 
 # Set the IP range for connected devices
-dhcp-range=192.168.1.2,192.168.1.100,12h
+dhcp-range=192.168.1.2,192.168.1.11,12h
 
 # Set domains to resolve locally
 address=/captive.example.com/<SERVER_IP>
