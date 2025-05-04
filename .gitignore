@@ -6,7 +6,7 @@ for-me/
 # Environment files
 .env
 remote-auth-server/.env
-local-auth-server/.env
+local-server-to-remote-server-connector/.env
 http-redirect-proxy-node/.env
 
 # Node modules

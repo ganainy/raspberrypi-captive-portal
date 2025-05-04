@@ -225,7 +225,7 @@
             };
             console.log('Cookie information:', cookieInfo);
 
-            const response = await fetch('/api/login_api', {
+            const response = await fetch('https://' + window.location.hostname + '/api/login_api', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -246,8 +246,10 @@
 
             if (response.ok) {
                 console.log('Login successful, redirecting to welcome page...');
-                // Set the username cookie so that it can be used in the welcome page
+                const responseData = await response.json();
+                // Set the username and user_id cookies
                 setCookie('username', username, 30);
+                setCookie('user_id', responseData.user_id, 30);
                 window.location.href = '/welcome.html';
             } else {
                 // Check content type before parsing

@@ -173,24 +173,34 @@
         // Function to revoke internet access
         async function revokeAccess() {
             try {
-                const response = await fetch('/deactivate_session_api', {
+                const user_id = getCookie('user_id');
+                if (!user_id) {
+                    console.error('User ID not found');
+                }
+
+                const response = await fetch('https://' + window.location.hostname + '/api/logout_api', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        user_id: getCookie('user_id'),
+                        user_id: parseInt(user_id), // Convert to number since it's stored as string in cookie
                         ip: cookieInfo.ip
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to revoke access');
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to revoke access');
                 }
 
                 const result = await response.json();
                 alert('Internet access has been revoked');
                 document.getElementById('revokeAccessBtn').disabled = true;
+
+                // Clear cookies after successful logout
+                setCookie('user_id', '', 0);
+                setCookie('username', '', 0);
             } catch (error) {
                 document.getElementById('error').textContent = 'Failed to revoke internet access: ' + error.message;
             }

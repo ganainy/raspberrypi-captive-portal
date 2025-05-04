@@ -5,12 +5,18 @@ const express = require('express');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 const axios = require('axios');
 
 // Environment variable checks
-console.log("Checking environment variables..."); // Before the env checks
-const requiredEnvVars = ['PORT', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+console.log("Checking environment variables...");
+const requiredEnvVars = [
+  'PORT', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
+  'HTTPS_KEY_PATH', 'HTTPS_CERT_PATH'
+];
 for (const varName of requiredEnvVars) {
   if (!process.env[varName]) {
     console.error(`Error: Environment variable ${varName} is not set. Please define it in the .env file.`);
@@ -23,9 +29,45 @@ console.log("Environment variables checked.");
 const PORT = process.env.PORT;
 console.log(`Using port: ${PORT}`);
 
-// Enable CORS for all origins
-app.use(cors());
+// Configure CORS with specific options
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests from the captive portal domain and localhost during development
+    const allowedOrigins = [
+      'https://ganainy.online',
+      'https://captive.ganainy.online',
+      'http://localhost:3000',
+      'https://localhost:3000'
+    ];
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // Allow cookies
+  maxAge: 86400 // Cache preflight requests for 24 hours
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());  // Parse incoming JSON requests
+
+// Read SSL certificate files
+let sslOptions;
+try {
+  sslOptions = {
+    key: fs.readFileSync(process.env.HTTPS_KEY_PATH),
+    cert: fs.readFileSync(process.env.HTTPS_CERT_PATH)
+  };
+  console.log('SSL certificates loaded successfully');
+} catch (error) {
+  console.error('Error loading SSL certificates:', error);
+  process.exit(1);
+}
 
 // MySQL Database Connection Pool Configuration - will be initialized after DB creation
 let pool;
@@ -90,6 +132,41 @@ async function createUsersTable() {
     console.error('Error creating users table:', err);
   }
 }
+
+
+// Route for deactivating a session
+app.post('/logout_api', async (req, res) => {
+  const { user_id, ip } = req.body;
+
+  if (!user_id || !ip) {
+    console.error('User ID and IP are required');
+    return res.status(400).json({ detail: 'User ID and IP are required' });
+  }
+
+  try {
+    // Send POST request to /deactivate-session on port 4000
+    const response = await axios.post('http://localhost:4000/deactivate-session', { user_id, ip });
+    console.log('Session deactivation response:', response.data);
+
+    // Handle response from session deactivation
+    if (response.status === 200) {
+      return res.json({
+        message: 'Session deactivated successfully',
+      });
+    } else {
+      console.error(`Session deactivation failed with status: ${response.status}`);
+      return res.status(500).json({
+        detail: `Session deactivation failed with status: ${response.status}`,
+      });
+    }
+  } catch (err) {
+    console.error('Error during session deactivation:', err);
+    return res.status(500).json({
+      detail: `Internal server error: ${err.message}`,
+    });
+  }
+});
+
 
 // Route for login
 app.post('/login_api', async (req, res) => {
@@ -156,6 +233,7 @@ app.post('/login_api', async (req, res) => {
     if (response.status === 200) {
       return res.json({
         message: 'Login successful and session activated on local machine successfully',
+        user_id: user.user_id // Add user_id to response
       });
     } else {
       console.error(`Session activation failed with status: ${response.status}`);
@@ -243,44 +321,16 @@ app.get('/hello_api', (req, res) => {
   res.json({ message: 'Authentication API up and running...' });
 });
 
-// Route for deactivating a session
-app.post('/deactivate_session_api', async (req, res) => {
-  const { user_id, ip } = req.body;
-
-  if (!user_id || !ip) {
-    console.error('User ID and IP are required');
-    return res.status(400).json({ detail: 'User ID and IP are required' });
-  }
-
-  try {
-    // Send POST request to /deactivate-session on port 4000
-    const response = await axios.post('http://localhost:4000/deactivate-session', { user_id, ip });
-    console.log('Session deactivation response:', response.data);
-
-    // Handle response from session deactivation
-    if (response.status === 200) {
-      return res.json({
-        message: 'Session deactivated successfully',
-      });
-    } else {
-      console.error(`Session deactivation failed with status: ${response.status}`);
-      return res.status(500).json({
-        detail: `Session deactivation failed with status: ${response.status}`,
-      });
-    }
-  } catch (err) {
-    console.error('Error during session deactivation:', err);
-    return res.status(500).json({
-      detail: `Internal server error: ${err.message}`,
-    });
-  }
-});
 
 // Initialize the database before starting the server
 initializeDatabase().then(() => {
-  // Start an HTTP server
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  // Create HTTP server 
+  const httpServer = require('http').createServer(app);
+
+  // Start HTTP server
+  httpServer.listen(PORT, () => {
+    console.log(`HTTP Server running on port ${PORT}`);
+    console.log('CORS configured with allowed origins');
   });
 }).catch(err => {
   console.error('Failed to initialize database:', err);

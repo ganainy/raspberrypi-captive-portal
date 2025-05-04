@@ -1,9 +1,9 @@
 # Helpful SQLite Commands for Session Database
 
-This guide provides common SQLite commands to inspect the session database used by the `local-auth-server`.
+This guide provides common SQLite commands to inspect the session database used by the `local-server-to-remote-server-connector`.
 
 1.  **Open the database:**
-    Replace `/path-to-db/[DB_NAME].db` with the actual path and filename specified in your `local-auth-server/.env` file (e.g., `/opt/captive-portal-listener-node/sessions.db`).
+    Replace `/path-to-db/[DB_NAME].db` with the actual path and filename specified in your `local-server-to-remote-server-connector/.env` file (e.g., `/opt/captive-portal-listener-node/sessions.db`).
     ```bash
     sqlite3 /path-to-db/[DB_NAME].db 
     ```

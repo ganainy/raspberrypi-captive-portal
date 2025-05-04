@@ -187,7 +187,7 @@ sudo iptables -A FORWARD -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 4
 ```
 
 ### Allow authenticated users:
-#### This will be done automatically when the local auth server [`local auth server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local%20auth%20server/listener.js) gets a request from the remote server to log in an authenticated device
+#### This will be done automatically when the local auth server [`local-server-to-remote-server-connector/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local-server-to-remote-server-connector/listener.js) gets a request from the remote server to log in an authenticated device
 ```bash
 sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
 sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
@@ -267,7 +267,7 @@ journalctl -fu captiveportal-ssh-tunnel.service
     sudo mkdir -p /opt/captive-portal-listener-node
     sudo nano /opt/captive-portal-listener-node/listener.js
     ```
-    *Paste the contents of [`local-auth-server/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local-auth-server/listener.js) into the editor and save.*
+    *Paste the contents of [`local-server-to-remote-server-connector/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local-server-to-remote-server-connector/listener.js) into the editor and save.*
 
 2. **Install Dependencies**
     ```bash
@@ -278,7 +278,7 @@ journalctl -fu captiveportal-ssh-tunnel.service
     ```bash
     sudo nano /opt/captive-portal-listener-node/.env
     ```
-    *Add the required environment variables based on the `.env.example` file in the `local-auth-server` directory.*
+    *Add the required environment variables based on the `.env.example` file in the `local-server-to-remote-server-connector` directory.*
 
 4. **Create a Systemd Service**
     ```bash

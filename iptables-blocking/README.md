@@ -37,3 +37,10 @@ The script loops through the configured IP range and for each IP address:
 
 ## Note
 Make sure to run this script with sudo privileges as it requires root access to modify iptables rules.
+
+## Removing Rules
+If you need to remove all the iptables rules created by this script, you can run the unblock script:
+```bash
+sudo ./iptables_unblock_rules.sh
+```
+This will remove all DNAT and reject rules that were previously added for the IP range.
