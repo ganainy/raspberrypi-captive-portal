@@ -108,7 +108,7 @@ sudo nmcli connection modify Hotspot \
 ```bash
 sudo nmcli connection modify Hotspot \
     wifi-sec.key-mgmt wpa-psk \
-    wifi-sec.psk "<YOUR_PASSWORD>"
+    wifi-sec.psk "YOUR_PASSWORD"
 ```
 
 4. **Disable DNS settings:**
@@ -142,61 +142,100 @@ sudo sysctl -p
 ---
 ## Step 5: Setup Firewall Rules
 
-### Default policies:
+The firewall setup is handled by the script located at `iptables-blocking/setup_firewall.sh`. This script sets up all necessary iptables rules for:
+- Default policies and basic security
+- NAT for internet connection sharing
+- DNS access for clients
+- Access to the remote authentication server
+- HTTP traffic redirection to the captive portal
+- HTTPS blocking for unauthenticated clients
+
+### Configure the script:
+
+1. **Edit the script variables:**
 ```bash
-sudo iptables -P INPUT ACCEPT
-sudo iptables -P FORWARD ACCEPT
-sudo iptables -P OUTPUT ACCEPT
+sudo nano iptables-blocking/setup_firewall.sh
 ```
 
-### Basic rules:
+Update these variables at the top of the file:
 ```bash
-sudo iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -A INPUT -i lo -j ACCEPT
-sudo iptables -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT
-sudo iptables -A INPUT -i eth0 -j ACCEPT
-sudo iptables -A INPUT -d <SERVER_IP>/32 -p tcp -m tcp --dport 443 -j ACCEPT
-sudo iptables -A INPUT -p tcp -m tcp --dport 443 -j REJECT --reject-with icmp-port-unreachable
+WLAN_INTERFACE="wlan0"  # Your WiFi interface
+ETH_INTERFACE="eth0"    # Your internet-connected interface
+LOCAL_IP="192.168.1.1"  # Local IP of your Raspberry Pi
+AUTH_SERVER_DOMAIN="your-domain.com"  # Your remote auth server domain
+AUTH_SERVER_IP="YOUR_SERVER_IP"       # Your remote auth server IP
 ```
 
-### Forwarding rules:
+2. **Make the script executable:**
 ```bash
-sudo iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i lo -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -j ACCEPT
-sudo iptables -A FORWARD -d <SERVER_IP>/32 -p tcp -m tcp --dport 443 -j ACCEPT
+sudo chmod +x iptables-blocking/setup_firewall.sh
 ```
 
-### NAT rules:
+3. **Run the script:**
 ```bash
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+sudo ./iptables-blocking/setup_firewall.sh
 ```
+
+The script will automatically:
+- Clear existing iptables rules
+- Set secure default policies
+- Configure NAT for internet sharing
+- Set up all required rules for the captive portal
+- Save the rules to persist across reboots
+
+You can verify the rules are in place by running:
+```bash
+sudo iptables -L -v
+sudo iptables -t nat -L -v
+```
+
 ---
-## Step 6: Blocking (HTTPS) and Redirecting (HTTP) Traffic
+## Step 6: Managing Internet Access for Devices
 
-### Allow Access to Remote Auth Server
-# Before applying general blocking rules, allow HTTPS traffic to the remote authentication server.
-# Replace <AUTH_SERVER_IP> with your actual remote server's IP address.
-sudo iptables -I FORWARD -i wlan0 -d <AUTH_SERVER_IP> -p tcp --dport 443 -j ACCEPT
+Internet access for devices is managed automatically by the listener service (`local-server-to-remote-server-connector/listener.js`) when users authenticate through the remote captive portal website. When a device is authenticated, the listener service automatically executes a block of commands to allow internet access, and when a session expires or is deactivated, it executes a block of commands to block access.
 
-### Blocking and redirecting:
-#### We will run a script [`iptables-blocking/iptables_blocking_rules.sh`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/iptables-blocking/iptables_blocking_rules.sh) to add the following rules for each IP in the range `192.168.1.2 - 192.168.1.100`:
+### Allow Internet Access Block
 ```bash
-sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
-sudo iptables -A FORWARD -i wlan0 -p tcp -s $UNAUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
+# 1. Allow all traffic from the client (add to beginning of FORWARD chain)
+sudo iptables -I FORWARD 1 -i wlan0 -s CLIENT_IP -j ACCEPT
+
+# 2. Remove HTTP redirection to captive portal (run until all instances are removed)
+while sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s CLIENT_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080 2>/dev/null; do
+    : # Empty loop body
+done
+
+# 3. Remove HTTPS blocking (run until all instances are removed)
+while sudo iptables -D FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable 2>/dev/null; do
+    : # Empty loop body
+done
 ```
 
-### Allow authenticated users:
-#### This will be done automatically when the local auth server [`local-server-to-remote-server-connector/listener.js`](https://github.com/ganainy/raspberrypi-captive-portal/blob/remote-captive/local-server-to-remote-server-connector/listener.js) gets a request from the remote server to log in an authenticated device
+### Block Internet Access Block
 ```bash
-sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
-sudo iptables -D FORWARD -i wlan0 -p tcp -s $AUTHENTICATED_DEVICE_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
+# 1. Remove any existing ALLOW rules (run until all instances are removed)
+while sudo iptables -D FORWARD -i wlan0 -s CLIENT_IP -j ACCEPT 2>/dev/null; do
+    : # Empty loop body
+done
+
+# 2. Add HTTP redirection to captive portal (only if it doesn't exist)
+if ! sudo iptables -t nat -C PREROUTING -i wlan0 -p tcp -s CLIENT_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080 2>/dev/null; then
+    sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s CLIENT_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
+fi
+
+# 3. Add HTTPS blocking (only if it doesn't exist)
+if ! sudo iptables -C FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable 2>/dev/null; then
+    sudo iptables -A FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
+fi
 ```
 
-### Save changes:
+To verify the rules for a specific IP (e.g., 192.168.1.4):
 ```bash
-sudo iptables-save | sudo tee /etc/iptables/rules.v4
+sudo iptables -L FORWARD -v -n | grep 192.168.1.4
+sudo iptables -t nat -L PREROUTING -v -n | grep 192.168.1.4
 ```
+
+Note: These commands are handled automatically by the listener service. The while loops ensure that duplicate rules are properly handled, and the if conditions prevent creating duplicate rules when blocking access. The `2>/dev/null` redirects any error messages that occur when no matching rules are found.
+
 ---
 ## Step 7: SSH Reverse Tunnel
 

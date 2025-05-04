@@ -148,6 +148,26 @@
             return "";
         }
 
+        // Function to set a cookie
+        function setCookie(name, value, days = 30) {
+            try {
+                console.log(`Setting cookie: ${name}`, { value, days });
+
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                const expires = `expires=${date.toUTCString()}`;
+
+                // Secure cookie settings with logging
+                const cookieString = `${name}=${encodeURIComponent(value)};${expires};path=/;SameSite=Strict;${window.location.protocol === 'https:' ? 'Secure' : ''}`;
+
+                document.cookie = cookieString;
+
+                console.log('Cookie set successfully', { name, cookieString });
+            } catch (error) {
+                console.error('Failed to set cookie', { name, error });
+            }
+        }
+
         // Get cookie information
         const cookieInfo = {
             mac: getCookie('mac'),

@@ -137,32 +137,71 @@ async function createUsersTable() {
 // Route for deactivating a session
 app.post('/logout_api', async (req, res) => {
   const { user_id, ip } = req.body;
+  console.log(`Logout request received for user_id: ${user_id}, ip: ${ip}`);
 
   if (!user_id || !ip) {
-    console.error('User ID and IP are required');
+    console.error('Logout failed: User ID and IP are required');
     return res.status(400).json({ detail: 'User ID and IP are required' });
   }
 
   try {
+    // Configure request with timeout
+    const requestConfig = {
+      timeout: 5000, // 5 second timeout
+      validateStatus: status => status >= 200 && status < 500 // Accept any status in 2xx-4xx range
+    };
+
     // Send POST request to /deactivate-session on port 4000
-    const response = await axios.post('http://localhost:4000/deactivate-session', { user_id, ip });
-    console.log('Session deactivation response:', response.data);
+    const response = await axios.post(
+      'http://localhost:4000/deactivate-session',
+      { user_id, ip },
+      requestConfig
+    );
+
+    console.log('Session deactivation response:', {
+      status: response.status,
+      data: response.data
+    });
 
     // Handle response from session deactivation
     if (response.status === 200) {
+      console.log(`Successfully deactivated session for user_id: ${user_id}`);
       return res.json({
         message: 'Session deactivated successfully',
+        status: 'success'
       });
     } else {
-      console.error(`Session deactivation failed with status: ${response.status}`);
-      return res.status(500).json({
-        detail: `Session deactivation failed with status: ${response.status}`,
+      console.error(`Session deactivation returned unexpected status: ${response.status}`);
+      return res.status(response.status).json({
+        detail: 'Session deactivation failed',
+        status: 'error',
+        code: response.status
       });
     }
   } catch (err) {
-    console.error('Error during session deactivation:', err);
+    // Handle specific error types
+    if (err.code === 'ECONNABORTED') {
+      console.error(`Logout timeout for user_id: ${user_id}:`, err.message);
+      return res.status(504).json({
+        detail: 'Session deactivation timed out',
+        status: 'error',
+        code: 'TIMEOUT'
+      });
+    }
+    if (err.code === 'ECONNREFUSED') {
+      console.error(`Deactivation service unreachable for user_id: ${user_id}:`, err.message);
+      return res.status(503).json({
+        detail: 'Session deactivation service unavailable',
+        status: 'error',
+        code: 'SERVICE_UNAVAILABLE'
+      });
+    }
+
+    console.error(`Unexpected error during logout for user_id: ${user_id}:`, err);
     return res.status(500).json({
-      detail: `Internal server error: ${err.message}`,
+      detail: 'Internal server error during session deactivation',
+      status: 'error',
+      code: 'INTERNAL_ERROR'
     });
   }
 });

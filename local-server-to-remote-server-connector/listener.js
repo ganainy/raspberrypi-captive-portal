@@ -19,8 +19,6 @@ const { exec } = require("child_process");
 const requiredEnvVarsListener = [
   'LISTENER_PORT',
   'DB_PATH',
-  'SESSION_DURATION_MS',
-  'CHECK_INTERVAL_MS',
   'WLAN_INTERFACE',
   'REDIRECT_TARGET_IP',
   'REDIRECT_TARGET_PORT'
@@ -70,16 +68,6 @@ db.serialize(() => {
   `);
   console.log("Sessions table ensured.");
 });
-
-// Use environment variables for session duration and check interval
-const sessionDurationMs = parseInt(process.env.SESSION_DURATION_MS, 10);
-const checkIntervalMs = parseInt(process.env.CHECK_INTERVAL_MS, 10);
-
-// Validate parsed numbers
-if (isNaN(sessionDurationMs) || isNaN(checkIntervalMs)) {
-  console.error('Error: SESSION_DURATION_MS and CHECK_INTERVAL_MS must be valid numbers.');
-  process.exit(1);
-}
 
 /**
  * Route to receive data from remote server
@@ -172,6 +160,17 @@ const activateOrUpdateSession = async (user_id, mac_address, ip, agent, original
 app.post('/activate-session', validateSessionFields, async (req, res) => {
   const { mac_address, user_id, username, ip, agent, original_url, http_method, referer } = req.body;
 
+  console.log('=== ACTIVATE SESSION REQUEST ===');
+  console.log('Time:', new Date().toISOString());
+  console.log('User ID:', user_id);
+  console.log('Username:', username);
+  console.log('IP Address:', ip);
+  console.log('MAC Address:', mac_address || 'Not provided');
+  console.log('User Agent:', agent || 'Not provided');
+  console.log('Original URL:', original_url || 'Not provided');
+  console.log('HTTP Method:', http_method || 'Not provided');
+  console.log('Referer:', referer || 'Not provided');
+
   try {
     console.log("Activating session...");
     const sessionId = await activateOrUpdateSession(
@@ -185,15 +184,23 @@ app.post('/activate-session', validateSessionFields, async (req, res) => {
       username
     );
 
+    console.log(`Session activated successfully with ID: ${sessionId}`);
     console.log("Allowing internet access for IP:", ip);
-    allowInternetAccess(ip);
+    await allowInternetAccess(ip);
+    console.log(`Internet access granted successfully for IP: ${ip}`);
 
+    console.log('=== ACTIVATE SESSION COMPLETE ===');
     res.status(200).json({
       message: 'Session activated successfully',
       sessionId,
     });
   } catch (err) {
+    console.error('=== ACTIVATE SESSION ERROR ===');
+    console.error('Time:', new Date().toISOString());
     console.error('Error during session activation:', err);
+    console.error('Request details:', { user_id, ip, username });
+    console.error('========================');
+
     res.status(500).json({
       error: 'Failed to activate or create session',
       details: err.message,
@@ -209,7 +216,7 @@ const deactivateSession = (userId, ip) => {
   db.run(`
     DELETE FROM sessions 
     WHERE user_id = ?
-  `, [userId], (err) => {
+  `, [userId], async (err) => {
     if (err) {
       console.error('Error deleting session:', err);
     } else {
@@ -222,12 +229,12 @@ const deactivateSession = (userId, ip) => {
       db.run(`
         INSERT INTO sessions (user_id, status, login_timestamp, logout_timestamp) 
         VALUES (?, 'active', ?, ?)
-      `, [userId, loginTimestamp, logoutTimestamp], (err) => {
+      `, [userId, loginTimestamp, logoutTimestamp], async (err) => {
         if (err) {
           console.error('Error creating new session:', err);
         } else {
           console.log(`New session for user ${userId} created.`);
-          revokeInternetAccess(ip);
+          await revokeInternetAccess(ip);
         }
       });
     }
@@ -236,17 +243,33 @@ const deactivateSession = (userId, ip) => {
 
 // Route for manual session deactivation
 app.post('/deactivate-session', validateSessionFields, async (req, res) => {
-  const { user_id, ip } = req.body;
+  const { user_id, ip, username } = req.body;
+
+  console.log('=== DEACTIVATE SESSION REQUEST ===');
+  console.log('Time:', new Date().toISOString());
+  console.log('User ID:', user_id);
+  console.log('IP Address:', ip);
+  console.log('Username:', username || 'Not provided');
 
   try {
-    console.log("Manually deactivating session...");
-    deactivateSession(user_id, ip);
+    console.log("Deactivating session...");
+    await deactivateSession(user_id, ip);
+    console.log("Session deactivated successfully");
+    console.log("Revoking internet access for IP:", ip);
+    await revokeInternetAccess(ip);
+    console.log(`Internet access revoked successfully for IP: ${ip}`);
+    console.log('=== DEACTIVATE SESSION COMPLETE ===');
 
     res.status(200).json({
       message: 'Session deactivated successfully'
     });
   } catch (err) {
+    console.error('=== DEACTIVATE SESSION ERROR ===');
+    console.error('Time:', new Date().toISOString());
     console.error('Error during session deactivation:', err);
+    console.error('Request details:', { user_id, ip, username });
+    console.error('========================');
+
     res.status(500).json({
       error: 'Failed to deactivate session',
       details: err.message,
@@ -266,18 +289,19 @@ const redirectTargetIp = process.env.REDIRECT_TARGET_IP;
 const redirectTargetPort = process.env.REDIRECT_TARGET_PORT;
 
 // Helper function to check if a rule exists in iptables
-function ruleExists(ruleCheckCommand) {
+function ruleExists(ruleType, clientIp) {
   return new Promise((resolve, reject) => {
-    exec(ruleCheckCommand, (error, stdout, stderr) => {
+    const command = ruleType === 'http' ?
+      `sudo iptables -t nat -C PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}` :
+      `sudo iptables -C FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`;
+
+    exec(command, (error) => {
+      // If command exits with non-zero status, rule doesn't exist (which is normal)
       if (error) {
-        reject(`Error checking rule existence: ${error.message}`);
-        return;
+        resolve(false);
+      } else {
+        resolve(true);
       }
-      if (stderr) {
-        reject(`stderr: ${stderr}`);
-        return;
-      }
-      resolve(stdout.includes('DNAT') || stdout.includes('REJECT'));
     });
   });
 }
@@ -287,42 +311,41 @@ async function allowInternetAccess(clientIp) {
   console.log(`Allowing internet access for IP: ${clientIp}`);
 
   try {
-    // First, remove any existing blocking rules
-    console.log('Step 1: Removing any existing blocking rules...');
+    // Always add explicit ALLOW rules first (at the beginning of chains)
+    console.log(`Step 1: Adding explicit ALLOW rules for ${clientIp}...`);
 
-    // Remove HTTP redirection rule if it exists
-    exec(`sudo iptables -t nat -D PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
-      if (error && !error.message.includes('No chain/target/match by that name')) {
-        console.log(`[HTTP Rule Remove] Error: ${error.message}`);
-      } else {
-        console.log('[HTTP Rule Remove] Successfully removed if existed');
-      }
-    });
+    // Add an explicit ALLOW rule for all traffic at the beginning of FORWARD chain
+    await executeCommand(`sudo iptables -I FORWARD 1 -i ${wlanInterface} -s ${clientIp} -j ACCEPT`);
 
-    // Remove HTTPS blocking rule if it exists
-    exec(`sudo iptables -D FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
-      if (error && !error.message.includes('No chain/target/match by that name')) {
-        console.log(`[HTTPS Rule Remove] Error: ${error.message}`);
-      } else {
-        console.log('[HTTPS Rule Remove] Successfully removed if existed');
-      }
-    });
+    // Give the system a moment to process the rule
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Add specialized logging to verify rules are being executed correctly
-    console.log('Step 2: Checking current iptables rules...');
-    exec('sudo iptables -L FORWARD -v -n --line-numbers', (error, stdout, stderr) => {
-      if (!error) {
-        console.log('[Debug] Current FORWARD chain rules:\n', stdout);
-      }
-    });
-    exec('sudo iptables -t nat -L PREROUTING -v -n --line-numbers', (error, stdout, stderr) => {
-      if (!error) {
-        console.log('[Debug] Current PREROUTING chain rules:\n', stdout);
-      }
-    });
+    // Step 2: Remove any blocking rules
+    console.log(`Step 2: Removing any existing blocking rules for ${clientIp}...`);
 
+    // Try removing HTTP redirection rule (multiple times if needed)
+    for (let i = 0; i < 3; i++) {
+      await executeCommand(`sudo iptables -t nat -D PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`);
+    }
+
+    // Try removing HTTPS blocking rule (multiple times if needed)
+    for (let i = 0; i < 3; i++) {
+      await executeCommand(`sudo iptables -D FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`);
+    }
+
+    // Debug: List current rules to verify
+    console.log(`Step 3: Verifying current rules...`);
+    const forwardRules = await executeCommand('sudo iptables -L FORWARD -n --line-numbers');
+    console.log(`Current FORWARD rules:\n${forwardRules}`);
+
+    const natRules = await executeCommand('sudo iptables -t nat -L PREROUTING -n --line-numbers');
+    console.log(`Current NAT PREROUTING rules:\n${natRules}`);
+
+    console.log(`Internet access fully enabled for ${clientIp}`);
+    return true;
   } catch (err) {
-    console.error(`Error managing iptables rules: ${err}`);
+    console.error(`Error allowing internet access: ${err}`);
+    return false;
   }
 }
 
@@ -331,46 +354,47 @@ async function revokeInternetAccess(clientIp) {
   console.log(`Revoking internet access for IP: ${clientIp}`);
 
   try {
-    console.log('Step 1: Adding blocking rules...');
+    // Remove any explicit ALLOW rule for the client
+    console.log(`Removing any explicit ALLOW rule for ${clientIp}...`);
+    await executeCommand(`sudo iptables -D FORWARD -i ${wlanInterface} -s ${clientIp} -j ACCEPT`);
 
-    // Add HTTP redirection rule
-    exec(`sudo iptables -t nat -A PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`, (error, stdout, stderr) => {
-      if (error) {
-        console.log(`[HTTP Rule Add] Error: ${error.message}`);
-      } else {
-        console.log('[HTTP Rule Add] Successfully added');
-      }
-    });
+    // Check if HTTP redirection rule exists before adding
+    const httpRuleExists = await ruleExists('http', clientIp);
+    if (!httpRuleExists) {
+      console.log(`Adding HTTP redirection rule for ${clientIp}...`);
+      await executeCommand(`sudo iptables -t nat -A PREROUTING -i ${wlanInterface} -p tcp -s ${clientIp} --dport 80 -j DNAT --to-destination ${redirectTargetIp}:${redirectTargetPort}`);
+    }
 
-    // Add HTTPS blocking rule
-    exec(`sudo iptables -A FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`, (error, stdout, stderr) => {
-      if (error) {
-        console.log(`[HTTPS Rule Add] Error: ${error.message}`);
-      } else {
-        console.log('[HTTPS Rule Add] Successfully added');
-      }
-    });
+    // Check if HTTPS blocking rule exists before adding
+    const httpsRuleExists = await ruleExists('https', clientIp);
+    if (!httpsRuleExists) {
+      console.log(`Adding HTTPS blocking rule for ${clientIp}...`);
+      await executeCommand(`sudo iptables -A FORWARD -i ${wlanInterface} -p tcp -s ${clientIp} --dport 443 -j REJECT --reject-with icmp-port-unreachable`);
+    }
 
-    // Add specialized logging to verify rules are being executed correctly
-    console.log('Step 2: Verifying rules were added...');
-    exec('sudo iptables -L FORWARD -v -n --line-numbers', (error, stdout, stderr) => {
-      if (!error) {
-        console.log('[Debug] Current FORWARD chain rules:\n', stdout);
-      }
-    });
-    exec('sudo iptables -t nat -L PREROUTING -v -n --line-numbers', (error, stdout, stderr) => {
-      if (!error) {
-        console.log('[Debug] Current PREROUTING chain rules:\n', stdout);
-      }
-    });
-
+    console.log(`Internet access restricted for ${clientIp}`);
+    return true;
   } catch (err) {
-    console.error(`Error managing iptables rules: ${err}`);
+    console.error(`Error revoking internet access: ${err}`);
+    return false;
   }
+}
+
+// Execute a command and return a promise
+function executeCommand(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error && !error.message.includes('No chain/target/match by that name')) {
+        console.error(`Command error: ${error.message}`);
+        reject(error);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
 }
 
 // Start the server
 app.listen(port, () => {
   console.log(`API listener server running at http://localhost:${port}`);
 });
-
