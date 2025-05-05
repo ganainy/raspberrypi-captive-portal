@@ -31,7 +31,7 @@ for (const varName of requiredEnvVarsListener) {
 }
 
 const app = express();
-// Use environment variable for port
+// Use environment variables
 const port = process.env.LISTENER_PORT;
 
 // Middleware
@@ -222,18 +222,17 @@ const deactivateSession = (userId, ip) => {
     } else {
       console.log(`Active session for user ${userId} deleted.`);
 
-      // Create a new session with login_timestamp set to now and logout_timestamp set based on SESSION_DURATION_MS
+      // Create a new session marked as inactive
       const loginTimestamp = new Date().toISOString();
-      const logoutTimestamp = new Date(Date.now() + sessionDurationMs).toISOString(); // Use configured duration
 
       db.run(`
-        INSERT INTO sessions (user_id, status, login_timestamp, logout_timestamp) 
-        VALUES (?, 'active', ?, ?)
-      `, [userId, loginTimestamp, logoutTimestamp], async (err) => {
+        INSERT INTO sessions (user_id, status, login_timestamp) 
+        VALUES (?, 'inactive', ?)
+      `, [userId, loginTimestamp], async (err) => {
         if (err) {
           console.error('Error creating new session:', err);
         } else {
-          console.log(`New session for user ${userId} created.`);
+          console.log(`New inactive session for user ${userId} created.`);
           await revokeInternetAccess(ip);
         }
       });
