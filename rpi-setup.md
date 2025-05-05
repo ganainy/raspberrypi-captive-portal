@@ -194,7 +194,7 @@ sudo iptables -t nat -L -v
 
 Internet access for devices is managed automatically by the listener service (`local-server-to-remote-server-connector/listener.js`) when users authenticate through the remote captive portal website. When a device is authenticated, the listener service automatically executes a block of commands to allow internet access, and when a session expires or is deactivated, it executes a block of commands to block access.
 
-### Allow Internet Access Block
+### Allow Internet Access 
 ```bash
 # 1. Allow all traffic from the client (add to beginning of FORWARD chain)
 sudo iptables -I FORWARD 1 -i wlan0 -s CLIENT_IP -j ACCEPT
@@ -210,7 +210,7 @@ while sudo iptables -D FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j REJEC
 done
 ```
 
-### Block Internet Access Block
+### Block Internet Access 
 ```bash
 # 1. Remove any existing ALLOW rules (run until all instances are removed)
 while sudo iptables -D FORWARD -i wlan0 -s CLIENT_IP -j ACCEPT 2>/dev/null; do
@@ -446,3 +446,5 @@ To view the logs for your three captive portal services at once:
 ---
 
 See [sqlite-commands.md](./sqlite-commands.md) for helpful commands to inspect the local session database.
+
+See [internet-source-change.md](./internet-source-change.md) for instructions on changing the internet source for your Raspberry Pi.
