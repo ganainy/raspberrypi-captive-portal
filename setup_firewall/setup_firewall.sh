@@ -46,13 +46,13 @@ sudo iptables -A FORWARD -i $WLAN_INTERFACE -d $AUTH_SERVER_IP -j ACCEPT
 IFS=. read i1 i2 i3 start <<< "${DHCP_RANGE_START}"
 IFS=. read _ _ _ end <<< "${DHCP_RANGE_END}"
 
-# Block HTTPS and redirect HTTP for unauthenticated clients
+# For each possible client IP
 for i in $(seq $start $end); do
   IP="$i1.$i2.$i3.$i"
-
-  # Block HTTPS
-  sudo iptables -A FORWARD -i $WLAN_INTERFACE -s $IP -p tcp --dport 443 -j REJECT --reject-with icmp-port-unreachable
-
+  
+  # Drop all HTTPS traffic (cleaner than REJECT, no error message sent back)
+  sudo iptables -A FORWARD -i $WLAN_INTERFACE -s $IP -p tcp --dport 443 -j DROP
+  
   # Redirect HTTP to captive portal
   sudo iptables -t nat -A PREROUTING -i $WLAN_INTERFACE -p tcp -s $IP --dport 80 -j DNAT --to-destination $LOCAL_IP:$CAPTIVE_PORTAL_PORT
 done

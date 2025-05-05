@@ -217,14 +217,14 @@ while sudo iptables -D FORWARD -i wlan0 -s CLIENT_IP -j ACCEPT 2>/dev/null; do
     : # Empty loop body
 done
 
-# 2. Add HTTP redirection to captive portal (only if it doesn't exist)
-if ! sudo iptables -t nat -C PREROUTING -i wlan0 -p tcp -s CLIENT_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080 2>/dev/null; then
-    sudo iptables -t nat -A PREROUTING -i wlan0 -p tcp -s CLIENT_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080
-fi
+# 2. Remove HTTP redirection to captive portal (run until all instances are removed)
+while sudo iptables -t nat -D PREROUTING -i wlan0 -p tcp -s CLIENT_IP --dport 80 -j DNAT --to-destination 192.168.1.1:8080 2>/dev/null; do
+    : # Empty loop body
+done
 
 # 3. Add HTTPS blocking (only if it doesn't exist)
-if ! sudo iptables -C FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable 2>/dev/null; then
-    sudo iptables -A FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j REJECT --reject-with icmp-port-unreachable
+if ! sudo iptables -C FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j DROP 2>/dev/null; then
+    sudo iptables -A FORWARD -i wlan0 -p tcp -s CLIENT_IP --dport 443 -j DROP
 fi
 ```
 
